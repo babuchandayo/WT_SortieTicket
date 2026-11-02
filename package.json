@@ -1,0 +1,44 @@
+{
+  "name": "wt-sortieticket",
+  "productName": "SortieTicket",
+  "version": "0.1.0",
+  "description": "WarThunder 分隊ランク（空/陸・BR・残参加枠・試合数）をOBSに表示するオーバーレイアプリ",
+  "main": "src/main.js",
+  "scripts": {
+    "fonts": "node scripts/copy-fonts.js",
+    "prestart": "npm run fonts",
+    "start": "electron .",
+    "preserve": "npm run fonts",
+    "serve": "node src/server.js",
+    "pretest": "npm run fonts",
+    "test": "node --test test/*.test.js",
+    "predist": "npm run fonts",
+    "dist": "electron-builder --win nsis portable --publish never"
+  },
+  "author": "babuchandayo",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.0",
+    "@fontsource/noto-sans-jp": "5.3.1",
+    "@fontsource/oswald": "5.3.0"
+  },
+  "build": {
+    "appId": "io.github.babuchandayo.sortieticket",
+    "productName": "SortieTicket",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "artifactName": "SortieTicket-${version}-${arch}-${target}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "SortieTicket-${version}-portable.${ext}"
+    }
+  }
+}

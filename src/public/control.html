@@ -31,6 +31,10 @@
   kbd { font: 11px/1 Consolas, monospace; background: #2a313b; border: 1px solid #3a4350; border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; }
   code { font-family: Consolas, monospace; }
 
+  /* 最前面表示：押している間はボタンが沈んだ見た目 */
+  .pin { padding: 5px 12px; font-size: 13px; border-radius: 7px; background: #2a313b; border: 1px solid #3a4350; box-shadow: 0 2px 0 #0b0d10; }
+  .pin[aria-pressed="true"] { background: #183a2a; border-color: #2f8a5a; color: #9ff0c2; box-shadow: inset 0 2px 5px rgba(0,0,0,.6); transform: translateY(2px); }
+  .pin[aria-pressed="true"]:active { transform: translateY(3px); }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
   .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
   .dot.ng { background: var(--ng); }
@@ -85,31 +89,17 @@
 </head>
 <body>
 <main>
-  <header><h1>SortieTicket</h1><span class="grow"></span><span class="dot" id="dot"></span><span class="muted" id="connText">接続中…</span></header>
-
-  <section>
-    <h2>オーバーレイ URL</h2>
-    <div class="row">
-      <span class="url grow" id="ovUrl"></span>
-      <button id="copyUrl" class="primary">コピー</button>
-    </div>
-    <p class="muted" style="margin:8px 0 0">OBS → ソース「ブラウザ」→「ローカルファイル」のチェックを外して URL に貼り付け。幅 1700 / 高さ 260 から調整してください。背景は最初から透過です。</p>
-  </section>
-
-  <section>
-    <h2>プレビュー（配信に映る見た目）</h2>
-    <div class="preview-wrap" id="pvWrap"><iframe id="preview" src="/?preview" title="プレビュー"></iframe></div>
-  </section>
+  <header>
+    <h1>SortieTicket</h1>
+    <button class="pin" id="pinTop" aria-pressed="false" hidden title="このウィンドウを常に他のウィンドウより前に表示">📌 最前面表示</button>
+    <span class="grow"></span><span class="dot" id="dot"></span><span class="muted" id="connText">接続中…</span>
+  </header>
 
   <section id="nowCard"></section>
 
   <section>
     <h2>追加</h2>
     <div class="row">
-      <input id="quick" class="grow" placeholder="例: 空14.0@2 陸9.3@1 空6.3@1　（Enterで追加）" aria-label="まとめて追加">
-      <button id="quickAdd" class="primary">追加</button>
-    </div>
-    <div class="row" style="margin-top:10px">
       <div class="seg-toggle" role="group" aria-label="種別">
         <button id="kAir" class="air">空</button><button id="kGround" class="ground">陸</button>
       </div>
@@ -118,17 +108,21 @@
       <span class="cell"><span class="lab">試合数</span><span class="stepper"><button data-st="games:-1">−</button><output id="nGames"></output><button data-st="games:1">＋</button></span></span>
       <button id="addOne">＋ 追加</button>
     </div>
-    <p class="muted" style="margin:8px 0 0">書式: <b>空/陸</b>（a/g も可）＋BR＋<b>@残参加枠</b>＋<b>x試合数</b>。省略した部分は下の欄の値を使います。例 <code>陸9.3@1x3</code></p>
   </section>
 
   <section>
     <div class="row" style="margin-bottom:8px">
-      <h2 style="margin:0">キュー（左から消化）</h2><span class="grow"></span>
+      <h2 style="margin:0">キュー（上から消化）</h2><span class="grow"></span>
       <button id="copyText" title="従来のテキスト表示と同じ形式でコピー">テキストでコピー</button>
       <button id="undo">元に戻す</button>
       <button id="clearAll" class="warn">全消去</button>
     </div>
     <ol id="queue"></ol>
+  </section>
+
+  <section>
+    <h2>プレビュー（配信に映る見た目）</h2>
+    <div class="preview-wrap" id="pvWrap"><iframe id="preview" src="/?preview" title="プレビュー"></iframe></div>
   </section>
 
   <section>
@@ -138,6 +132,15 @@
       <span class="cell"><span class="lab">試合数の初期値</span><span class="stepper"><button data-set="defaultGames:-1">−</button><output id="sGames"></output><button data-set="defaultGames:1">＋</button></span></span>
       <span class="cell"><span class="lab">残参加枠の初期値</span><span class="stepper"><button data-set="defaultSlots:-1">−</button><output id="sSlots"></output><button data-set="defaultSlots:1">＋</button></span></span>
     </div>
+  </section>
+
+  <section>
+    <h2>オーバーレイ URL</h2>
+    <div class="row">
+      <span class="url grow" id="ovUrl"></span>
+      <button id="copyUrl" class="primary">コピー</button>
+    </div>
+    <p class="muted" style="margin:8px 0 0">OBS → ソース「ブラウザ」→「ローカルファイル」のチェックを外して URL に貼り付け。幅 1700 / 高さ 260 から調整してください。背景は最初から透過です。</p>
   </section>
 
   <section class="muted">
@@ -226,27 +229,6 @@
     commit(function (s) { s.queue[0].live = false; });
   }
 
-  // ---- まとめて入力 ----
-  var KIND = { "空": "air", "a": "air", "air": "air", "陸": "ground", "g": "ground", "gr": "ground", "ground": "ground" };
-  function parseQuick(text) {
-    var out = [], bad = [], kind = draft.kind;
-    var toks = text.replace(/[０-９．＠／ｘ]/g, function (c) { return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); })
-      .split(/(?:->|→|＞|>|,|、|\s)+/).filter(Boolean);
-    toks.forEach(function (t) {
-      var m = t.match(/^(空|陸|air|ground|gr|a|g)?(\d{1,2}(?:\.\d{1,2})?)(?:[@/](\d))?(?:[x×*](\d))?$/i);
-      if (!m) {
-        var k = KIND[t.toLowerCase()];
-        if (k) { kind = k; return; }
-        bad.push(t); return;
-      }
-      if (m[1]) kind = KIND[m[1].toLowerCase()];
-      var br = fmtBR(m[2]);
-      if (!br) { bad.push(t); return; }
-      out.push(newEntry(kind, br, m[3] != null ? +m[3] : draft.slots, m[4] != null ? +m[4] : draft.games));
-    });
-    return { items: out, bad: bad };
-  }
-
   // ---- 描画 ----
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function pips(e) {
@@ -288,8 +270,8 @@
         '<span class="cell"><span class="lab">残参加枠</span><span class="stepper"><button data-act="slots:-1">−</button><output>' + e.slots + '</output><button data-act="slots:1">＋</button></span></span>' +
         '<span class="cell"><span class="lab">試合</span><span class="stepper"><button data-act="games:-1">−</button><output>' + (e.games - e.played) + "/" + e.games + '</output><button data-act="games:1">＋</button></span></span>' +
         pips(e) + "</div>" +
-        '<div class="ops"><button data-act="up" title="左へ"' + (i === 0 ? " disabled" : "") + '>◀</button>' +
-        '<button data-act="down" title="右へ"' + (i === state.queue.length - 1 ? " disabled" : "") + '>▶</button>' +
+        '<div class="ops"><button data-act="up" title="上へ"' + (i === 0 ? " disabled" : "") + '>▲</button>' +
+        '<button data-act="down" title="下へ"' + (i === state.queue.length - 1 ? " disabled" : "") + '>▼</button>' +
         '<button data-act="del" class="warn" title="削除">✕</button></div></li>';
     }).join("");
     if (focused) { var inp = ol.querySelector('li[data-id="' + focused + '"] .br-in'); if (inp) inp.focus(); }
@@ -362,15 +344,6 @@
   $("addOne").onclick = addFromForm;
   $("brIn").addEventListener("keydown", function (ev) { if (ev.key === "Enter") addFromForm(); });
 
-  function addQuick() {
-    var r = parseQuick($("quick").value);
-    if (!r.items.length) { toast(r.bad.length ? "読み取れません: " + r.bad.join(" ") : "入力が空です"); return; }
-    commit(function (s) { s.queue = s.queue.concat(r.items); });
-    $("quick").value = r.bad.join(" ");
-    toast(r.items.length + "件追加" + (r.bad.length ? "（読み取れず: " + r.bad.join(" ") + "）" : ""));
-  }
-  $("quickAdd").onclick = addQuick;
-  $("quick").addEventListener("keydown", function (ev) { if (ev.key === "Enter") addQuick(); });
 
   $("undo").onclick = undo;
   $("clearAll").onclick = function () { if (state.queue.length && confirm("キューをすべて消しますか？（元に戻すで復元できます）")) commit(function (s) { s.queue = []; }); };
@@ -400,6 +373,18 @@
       commit(function (s) { s.queue[0].slots = clamp(s.queue[0].slots + d, 0, MAX_SLOTS); });
     }
   });
+
+  // 最前面表示（アプリのウィンドウで開いているときだけ使える）
+  if (window.sortieApp) {
+    var pin = $("pinTop");
+    pin.hidden = false;
+    var setPin = function (on) { pin.setAttribute("aria-pressed", on ? "true" : "false"); };
+    window.sortieApp.getAlwaysOnTop().then(setPin);
+    pin.onclick = function () {
+      var next = pin.getAttribute("aria-pressed") !== "true";
+      window.sortieApp.setAlwaysOnTop(next).then(function (on) { setPin(on); toast(on ? "最前面表示: オン" : "最前面表示: オフ"); });
+    };
+  }
 
   // プレビューの縮小表示
   function fitPreview() {

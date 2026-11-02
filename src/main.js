@@ -1,6 +1,6 @@
 "use strict";
 // Electron のエントリーポイント。ローカルサーバーを起動し、操作画面をウィンドウで開く。
-const { app, BrowserWindow, Menu, dialog, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { createServer } = require("./server");
@@ -9,6 +9,11 @@ const DEFAULT_PORT = 4630;
 
 function readConfig(file) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch (e) { return {}; }
+}
+
+function writeConfig(file, config) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(config, null, 2));
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -26,10 +31,7 @@ if (!app.requestSingleInstanceLock()) {
     const configFile = path.join(dataDir, "config.json");
     const config = readConfig(configFile);
     const port = Number(config.port) || DEFAULT_PORT;
-    if (!fs.existsSync(configFile)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-      fs.writeFileSync(configFile, JSON.stringify({ port }, null, 2));
-    }
+    if (!fs.existsSync(configFile)) writeConfig(configFile, { port });
 
     srv = createServer({ port, dataDir });
     try {
@@ -68,7 +70,18 @@ if (!app.requestSingleInstanceLock()) {
       minHeight: 500,
       title: "SortieTicket",
       backgroundColor: "#15181d",
-      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+      alwaysOnTop: config.alwaysOnTop === true,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join(__dirname, "preload.js") },
+    });
+
+    // 最前面表示の切り替え（状態は config.json に保存して次回も引き継ぐ）
+    const fromWin = (e) => win && e.sender === win.webContents;
+    ipcMain.handle("always-on-top:get", (e) => fromWin(e) && win.isAlwaysOnTop());
+    ipcMain.handle("always-on-top:set", (e, on) => {
+      if (!fromWin(e)) return false;
+      win.setAlwaysOnTop(on === true);
+      writeConfig(configFile, Object.assign(readConfig(configFile), { alwaysOnTop: win.isAlwaysOnTop() }));
+      return win.isAlwaysOnTop();
     });
     // 外部リンクは既定のブラウザで開く
     win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });

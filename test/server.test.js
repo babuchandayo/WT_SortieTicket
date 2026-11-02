@@ -33,7 +33,7 @@ function readSSE(onEvent) {
 test("sanitizeState は不正な値を補正する", () => {
   const s = sanitizeState({
     queue: [
-      { id: "a", kind: "ground", br: "9.3", slots: 7, games: 0, played: 5, live: "yes" },
+      { id: "a", kind: "ground", br: "9.3", slots: 7, games: 0, played: 5, live: "yes", memo: "  フレンド\n枠 " },
       { id: "b", kind: "x", br: "abc" },
       { id: "a", kind: "air", br: "1" },
       { id: "<c>", kind: "air", br: 14 },
@@ -41,8 +41,8 @@ test("sanitizeState は不正な値を補正する", () => {
     settings: { showLegend: false, defaultGames: 99 },
   });
   assert.deepStrictEqual(s.queue, [
-    { id: "a", kind: "ground", br: "9.3", slots: 3, games: 1, played: 0, live: false },
-    { id: "c", kind: "air", br: "14.0", slots: 0, games: 2, played: 0, live: false },
+    { id: "a", kind: "ground", br: "9.3", slots: 3, games: 1, played: 0, live: false, memo: "フレンド枠" },
+    { id: "c", kind: "air", br: "14.0", slots: 0, games: 2, played: 0, live: false, memo: "" },
   ]);
   assert.deepStrictEqual(s.settings, { showLegend: false, defaultGames: 9, defaultSlots: 3 });
 });
@@ -68,7 +68,7 @@ test("サーバー: 状態の更新・配信・保存", async (t) => {
   const sse = await readSSE((e) => events.push(e));
   t.after(() => sse.destroy());
 
-  const state = { queue: [{ id: "x1", kind: "air", br: "15.0", slots: 3, games: 2, played: 0, live: true }], settings: { showLegend: true, defaultGames: 2, defaultSlots: 3 } };
+  const state = { queue: [{ id: "x1", kind: "air", br: "15.0", slots: 3, games: 2, played: 0, live: true, memo: "〇〇さん" }], settings: { showLegend: true, defaultGames: 2, defaultSlots: 3 } };
   const r = await fetch(base + "/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }) });
   assert.strictEqual(r.status, 200);
   assert.strictEqual((await r.json()).rev, 1);

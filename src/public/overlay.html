@@ -17,6 +17,7 @@
     --legend-gap: calc(var(--gap) * 3);  /* 見方枠と右側の間隔（通常の3倍） */
     --gauge-gap: 8px;   /* プレートとゲージの間隔 */
     --scale: 1;
+    --legend-green: #1fa055;  /* 見方枠「BR / 残参加枠」の背景 */
     --font-num: "Oswald", "Bahnschrift", "Arial Narrow", Impact, sans-serif;
     --font-jp: "Oswald", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
   }
@@ -74,7 +75,9 @@
     text-shadow: 0 2px 4px rgba(0,0,0,.5);
     opacity: 0; transform: translateY(-6px); transition: opacity .35s, transform .35s;
   }
-  .entry.first .now { opacity: 1; transform: none; }
+  /* Now! は今の試合（ゲージの該当バー）の真下の中央に置く。left は JS で計算 */
+  .entry .now { position: relative; left: 0; width: max-content; margin-left: 0; transform: translate(-50%, -6px); transition: opacity .35s, transform .35s, left .35s ease; }
+  .entry.first .now { opacity: 1; transform: translate(-50%, 0); }
 
   /* 見方（凡例）枠：左端に固定 */
   .legend { margin-right: var(--legend-gap); }
@@ -84,15 +87,15 @@
   .lg-top > div { flex: 1 1 0; display: flex; align-items: center; justify-content: center; }
   .lg-air { background: var(--air); }
   .lg-ground { background: var(--ground); border-left: 3px solid rgba(255,255,255,.95); }
-  .lg-bottom { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; background: var(--air); }
+  .lg-bottom { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; background: var(--legend-green); }
   .lg-text {
     transform: skewX(calc(var(--skew) * -1));
     color: #fff; font-weight: 700; line-height: 1; white-space: nowrap;
     text-shadow: 0 2px 0 rgba(0,0,0,.35);
   }
   .lg-top .lg-text { font-family: var(--font-num); font-size: 30px; letter-spacing: .5px; }
-  .lg-bottom .lg-text { font-family: var(--font-jp); font-size: 30px; }
-  .lg-bottom .jp { font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; font-size: 26px; }
+  .lg-bottom .lg-text { font-family: var(--font-num); font-size: 30px; display: flex; align-items: center; gap: 8px; }
+  .lg-bottom .jp { font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; font-size: 31px; line-height: 1; }
   .legend .now { opacity: 1; transform: none; font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; font-size: 34px; }
 
   .pop { animation: pop .35s ease-out; }
@@ -107,7 +110,7 @@
         <div class="lg-air"><span class="lg-text">Air</span></div>
         <div class="lg-ground"><span class="lg-text">Ground</span></div>
       </div>
-      <div class="lg-bottom"><span class="lg-text">BR / <span class="jp">残参加枠</span></span></div>
+      <div class="lg-bottom"><span class="lg-text"><span>BR /</span><span class="jp">残参加枠</span></span></div>
     </div>
     <div class="gauge"><i class="seg"></i><i class="seg"></i></div>
     <div class="now">試合数!!</div>
@@ -157,6 +160,19 @@
     for (var i = 0; i < g.children.length; i++) {
       g.children[i].className = "seg" + (i < e.played ? " used" : "") + (i === e.played && e.live ? " live" : "");
     }
+    placeNow(el, e);
+  }
+
+  // Now! を今の試合のバー（played 番目）の中央の真下へ。
+  // offsetLeft は変形（アニメーションや傾き）の影響を受けないので、傾きの分だけ自分で補正する
+  var TAN = Math.tan(20 * Math.PI / 180);
+  function placeNow(el, e) {
+    var seg = el.querySelector(".gauge").children[Math.min(e.played, e.games - 1)];
+    var now = el.querySelector(".now");
+    if (!seg || !now) return;
+    var gaugeGap = parseFloat(getComputedStyle(el).getPropertyValue("--gauge-gap")) || 8;
+    var skewShift = (gaugeGap + seg.offsetHeight / 2) * TAN;  // ゲージは上に向かって右へ傾いている
+    now.style.left = (seg.offsetLeft + seg.offsetWidth / 2 - skewShift) + "px";
   }
 
   function rectsOf(ids) {

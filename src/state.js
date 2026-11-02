@@ -42,6 +42,7 @@ function sanitizeEntry(e) {
     games,
     played: int(e.played, 0, games - 1, 0),
     live: e.live === true,
+    memo: typeof e.memo === "string" ? e.memo.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 60) : "",
   };
 }
 

@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SortieTicket</title>
+<style>
+  :root {
+    --bg: #15181d; --panel: #1e232a; --line: #2e353f; --text: #e8ecf1; --muted: #8b95a3;
+    --air: #1687f2; --ground: #ff6a00; --gauge: #ffd23c; --ok: #35c46a; --ng: #e5484d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; }
+  header { display: flex; align-items: center; gap: 10px; padding: 4px 2px 0; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: .02em; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 8px; letter-spacing: .05em; }
+  button { font: inherit; color: var(--text); background: #2a313b; border: 1px solid #3a4350; border-radius: 7px; padding: 6px 10px; cursor: pointer; }
+  button:hover { background: #333c48; }
+  button:active { transform: translateY(1px); }
+  button.primary { background: #2f6fe0; border-color: #2f6fe0; }
+  button.warn { background: #3a2326; border-color: #5a2a30; }
+  button.toggle.on { background: #1f5a3c; border-color: #2f8a5a; }
+  button:disabled { opacity: .4; cursor: default; }
+  input { font: inherit; color: var(--text); background: #12151a; border: 1px solid #3a4350; border-radius: 7px; padding: 6px 8px; min-width: 0; }
+  input:focus, button:focus-visible { outline: 2px solid #4b8cff; outline-offset: 1px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grow { flex: 1 1 auto; }
+  .muted { color: var(--muted); font-size: 12px; }
+  kbd { font: 11px/1 Consolas, monospace; background: #2a313b; border: 1px solid #3a4350; border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px; }
+  code { font-family: Consolas, monospace; }
+
+  /* 最前面表示：押している間はボタンが沈んだ見た目 */
+  .pin { padding: 5px 12px; font-size: 13px; border-radius: 7px; background: #2a313b; border: 1px solid #3a4350; box-shadow: 0 2px 0 #0b0d10; }
+  .pin[aria-pressed="true"] { background: #183a2a; border-color: #2f8a5a; color: #9ff0c2; box-shadow: inset 0 2px 5px rgba(0,0,0,.6); transform: translateY(2px); }
+  .pin[aria-pressed="true"]:active { transform: translateY(3px); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.ng { background: var(--ng); }
+  .url { font-family: Consolas, monospace; font-size: 15px; background: #12151a; border: 1px solid #3a4350; border-radius: 7px; padding: 6px 10px; user-select: all; }
+
+  /* プレビュー */
+  .preview-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); height: 190px; position: relative; }
+  .preview-wrap iframe { border: 0; width: 1700px; height: 300px; transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+
+  /* 進行 */
+  .now-title { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 4px; font-weight: 700; color: #fff; transform: skewX(-12deg); }
+  .chip > span { display: inline-block; transform: skewX(12deg); }
+  .chip.air { background: var(--air); } .chip.ground { background: var(--ground); }
+  .big { font-size: 17px; font-weight: 700; padding: 12px 14px; }
+  .big.live { background: #5a4a10; border-color: var(--gauge); color: var(--gauge); }
+  .pips { display: inline-flex; gap: 4px; vertical-align: middle; }
+  .pips i { width: 18px; height: 8px; background: var(--gauge); transform: skewX(-20deg); }
+  .pips i.used { background: #39404a; }
+  .pips i.live { animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+
+  /* 追加 */
+  .seg-toggle { display: inline-flex; border: 1px solid #3a4350; border-radius: 7px; overflow: hidden; }
+  .seg-toggle button { border: 0; border-radius: 0; padding: 6px 14px; background: #20262e; }
+  .seg-toggle button.on.air { background: var(--air); }
+  .seg-toggle button.on.ground { background: var(--ground); }
+  .stepper { display: inline-flex; align-items: center; gap: 4px; }
+  .stepper button { width: 30px; padding: 4px 0; }
+  .stepper output { min-width: 22px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  /* キュー */
+  ol#queue { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  ol#queue li { display: grid; grid-template-columns: 28px 64px 1fr auto; gap: 8px; align-items: center; padding: 8px; border-radius: 8px; background: #181c22; border: 1px solid var(--line); position: relative; }
+  ol#queue li .cells { grid-column: 3 / -1; }
+  ol#queue li .memo { grid-column: 1 / 4; }
+  ol#queue li .ops { grid-column: 4; }
+  .memo { width: 100%; font-size: 13px; padding: 5px 8px; }
+  .memo::placeholder { color: #5d6672; }
+  /* 並べ替えた区分を一瞬光らせて、どれが動いたか分かるようにする */
+  ol#queue li.moved { animation: moved .9s ease-out; }
+  @keyframes moved { 0% { box-shadow: 0 0 0 2px #4b8cff, 0 0 16px rgba(75,140,255,.6); } 100% { box-shadow: 0 0 0 2px transparent; } }
+  ol#queue li.first { border-color: var(--gauge); }
+  .kind-btn { width: 28px; height: 28px; padding: 0; font-weight: 700; color: #fff; }
+  .kind-btn.air { background: var(--air); border-color: var(--air); } .kind-btn.ground { background: var(--ground); border-color: var(--ground); }
+  .br-in { width: 64px; text-align: center; font-weight: 700; font-size: 16px; }
+  .cells { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  .cell { display: inline-flex; align-items: center; gap: 4px; }
+  .cell .lab { font-size: 11px; color: var(--muted); }
+  .ops { display: flex; gap: 4px; }
+  .ops button { padding: 4px 8px; }
+  .empty { color: var(--muted); text-align: center; padding: 14px; }
+  .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: #2a313b; border: 1px solid #3a4350; padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 560px) {
+    ol#queue li { grid-template-columns: 28px 60px 1fr auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SortieTicket</h1>
+    <button class="pin" id="pinTop" aria-pressed="false" hidden title="このウィンドウを常に他のウィンドウより前に表示">📌 最前面表示</button>
+    <span class="grow"></span><span class="dot" id="dot"></span><span class="muted" id="connText">接続中…</span>
+  </header>
+
+  <section id="nowCard"></section>
+
+  <section>
+    <h2>追加</h2>
+    <div class="row">
+      <div class="seg-toggle" role="group" aria-label="種別">
+        <button id="kAir" class="air">空</button><button id="kGround" class="ground">陸</button>
+      </div>
+      <input id="brIn" class="br-in" placeholder="BR" aria-label="BR" inputmode="decimal">
+      <span class="cell"><span class="lab">残参加枠</span><span class="stepper"><button data-st="slots:-1">−</button><output id="nSlots"></output><button data-st="slots:1">＋</button></span></span>
+      <span class="cell"><span class="lab">試合数</span><span class="stepper"><button data-st="games:-1">−</button><output id="nGames"></output><button data-st="games:1">＋</button></span></span>
+      <button id="addOne">＋ 追加</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="row" style="margin-bottom:8px">
+      <h2 style="margin:0">キュー（上から消化）</h2><span class="grow"></span>
+      <button id="copyText" title="従来のテキスト表示と同じ形式でコピー">テキストでコピー</button>
+      <button id="undo">元に戻す</button>
+      <button id="clearAll" class="warn">全消去</button>
+    </div>
+    <ol id="queue"></ol>
+  </section>
+
+  <section>
+    <h2>プレビュー（配信に映る見た目）</h2>
+    <div class="preview-wrap" id="pvWrap"><iframe id="preview" src="/?preview" title="プレビュー"></iframe></div>
+  </section>
+
+  <section>
+    <h2>表示設定</h2>
+    <div class="row">
+      <button class="toggle" id="tLegend">見方の枠を表示</button>
+      <span class="cell"><span class="lab">試合数の初期値</span><span class="stepper"><button data-set="defaultGames:-1">−</button><output id="sGames"></output><button data-set="defaultGames:1">＋</button></span></span>
+      <span class="cell"><span class="lab">残参加枠の初期値</span><span class="stepper"><button data-set="defaultSlots:-1">−</button><output id="sSlots"></output><button data-set="defaultSlots:1">＋</button></span></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>オーバーレイ URL</h2>
+    <div class="row">
+      <span class="url grow" id="ovUrl"></span>
+      <button id="copyUrl" class="primary">コピー</button>
+    </div>
+    <p class="muted" style="margin:8px 0 0">OBS → ソース「ブラウザ」→「ローカルファイル」のチェックを外して URL に貼り付け。幅 1700 / 高さ 260 から調整してください。背景は最初から透過です。</p>
+  </section>
+
+  <section class="muted">
+    ショートカット（入力欄の外で）: <kbd>Space</kbd> 試合開始 → 試合終了 ／ <kbd>Esc</kbd> 開始を取り消し ／ <kbd>↑</kbd><kbd>↓</kbd> 先頭の残参加枠 ± ／ <kbd>Ctrl</kbd>+<kbd>Z</kbd> 元に戻す
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+  var MAX_SLOTS = 3, MAX_GAMES = 9;
+  var $ = function (id) { return document.getElementById(id); };
+  function loadLocal(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function saveLocal(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  var state = { queue: [], settings: { showLegend: true, defaultGames: 2, defaultSlots: 3 } };
+  var rev = -1, inflight = 0, loaded = false;
+  var draft = loadLocal("sortie-draft", null);
+  var history = [];
+
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+  function fmtBR(v) {
+    var n = parseFloat(String(v).replace(",", "."));
+    if (!isFinite(n) || n <= 0 || n > 30) return null;
+    return n.toFixed(1);
+  }
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(function () { t.classList.remove("show"); }, 1800); }
+  function setConn(ok, text) { $("dot").className = "dot " + (ok ? "ok" : "ng"); $("connText").textContent = text; }
+
+  // ---- アプリ（サーバー）との通信 ----
+  function push() {
+    inflight++;
+    return fetch("/api/state", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: state }) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) { rev = Math.max(rev, j.rev); setConn(true, "アプリと接続中"); })
+      .catch(function () { setConn(false, "アプリと通信できません"); toast("保存できませんでした。アプリが起動しているか確認してください"); })
+      .then(function () { inflight--; });
+  }
+  function showPreview() {
+    try { $("preview").contentWindow.postMessage({ type: "sortie-state", state: state }, location.origin); } catch (e) {}
+  }
+  // 他の操作画面（OBSドックなど）で変更されたら取り込む
+  var es = new EventSource("/events");
+  es.addEventListener("state", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    setConn(true, "アプリと接続中");
+    if (inflight > 0 || d.rev <= rev) return;
+    rev = d.rev; state = d.state;
+    if (!loaded) { loaded = true; if (!draft) resetDraft(); drawDraft(); }
+    drawAll();
+  });
+  es.onerror = function () { setConn(false, "アプリと通信できません（再接続中）"); };
+
+  // ---- 状態変更（すべてここを通す） ----
+  function commit(mutator, opts) {
+    if (!loaded) { toast("読み込み中です"); return; }
+    history.push(JSON.stringify(state));
+    if (history.length > 50) history.shift();
+    mutator(state);
+    // メモの確定では一覧を描き直さない（直後のボタンのクリックを取りこぼさないため）
+    if (opts && opts.quiet) showPreview(); else drawAll();
+    push();
+  }
+  function undo() {
+    if (!history.length) { toast("戻せる操作がありません"); return; }
+    state = JSON.parse(history.pop());
+    drawAll(); push(); toast("元に戻しました");
+  }
+  function find(id) { for (var i = 0; i < state.queue.length; i++) if (state.queue[i].id === id) return i; return -1; }
+  function newEntry(kind, br, slots, games) {
+    return { id: uid(), kind: kind, br: br, slots: clamp(slots, 0, MAX_SLOTS), games: clamp(games, 1, MAX_GAMES), played: 0, live: false };
+  }
+
+  // Space: 試合開始 → 終了（1試合消化）。最後の試合が終わったら区分を完了
+  function advance() {
+    if (!state.queue.length) { toast("キューが空です"); return; }
+    commit(function (s) {
+      var e = s.queue[0];
+      if (!e.live) { e.live = true; return; }
+      e.live = false; e.played++;
+      if (e.played >= e.games) s.queue.shift();
+    });
+  }
+  function cancelLive() {
+    if (!state.queue.length || !state.queue[0].live) return;
+    commit(function (s) { s.queue[0].live = false; });
+  }
+
+  // ---- 描画 ----
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function pips(e) {
+    var h = ""; for (var i = 0; i < e.games; i++) h += '<i class="' + (i < e.played ? "used" : "") + (i === e.played && e.live ? " live" : "") + '"></i>';
+    return '<span class="pips">' + h + "</span>";
+  }
+  function kindName(k) { return k === "air" ? "空" : "陸"; }
+
+  function drawAll() { draw(); drawSettings(); showPreview(); }
+
+  function draw() {
+    var e = state.queue[0], nc = $("nowCard");
+    if (!e) {
+      nc.innerHTML = '<h2>進行</h2><div class="empty">キューが空です。「追加」から入れてください。</div>';
+    } else {
+      var left = e.games - e.played;
+      nc.innerHTML = '<h2>進行（先頭の区分）</h2>' +
+        '<div class="now-title"><span class="chip ' + e.kind + '"><span>' + kindName(e.kind) + " " + esc(e.br) + "</span></span>" +
+        '<span>残参加枠 ' + e.slots + '</span><span class="grow"></span>' + pips(e) + '<span class="muted">残り' + left + "試合</span></div>" +
+        '<div class="row">' +
+        '<button class="big grow ' + (e.live ? "live" : "primary") + '" id="advBtn">' +
+        (e.live ? "試合終了（1試合消化）" + (left === 1 ? " → 区分完了" : "") : "試合開始") + ' <kbd>Space</kbd></button>' +
+        (e.live ? '<button id="cancelLive">開始を取り消す</button>' : "") +
+        '<button id="doneBtn" class="warn">区分を完了</button></div>';
+      $("advBtn").onclick = advance;
+      if ($("cancelLive")) $("cancelLive").onclick = cancelLive;
+      $("doneBtn").onclick = function () { commit(function (s) { s.queue.shift(); }); };
+    }
+
+    var ol = $("queue");
+    if (!state.queue.length) { ol.innerHTML = '<li class="empty" style="display:block">（空）</li>'; return; }
+    // 描き直す前の位置と順番、入力中の欄を覚えておく
+    var before = {}, oldIndex = {};
+    Array.prototype.forEach.call(ol.querySelectorAll("li[data-id]"), function (li, i) { before[li.dataset.id] = li.getBoundingClientRect().top; oldIndex[li.dataset.id] = i; });
+    var ae = document.activeElement, focus = null;
+    if (ae && ae.closest && ae.closest("#queue li[data-id]") && ae.dataset.act) {
+      focus = { id: ae.closest("li").dataset.id, act: ae.dataset.act, sel: ae.selectionStart != null ? [ae.selectionStart, ae.selectionEnd] : null };
+    }
+    ol.innerHTML = state.queue.map(function (e, i) {
+      return '<li class="' + (i === 0 ? "first" : "") + '" data-id="' + e.id + '">' +
+        '<button class="kind-btn ' + e.kind + '" data-act="kind" title="空/陸を切り替え">' + kindName(e.kind) + "</button>" +
+        '<input class="br-in" data-act="br" value="' + esc(e.br) + '" aria-label="BR">' +
+        '<div class="cells">' +
+        '<span class="cell"><span class="lab">残参加枠</span><span class="stepper"><button data-act="slots:-1">−</button><output>' + e.slots + '</output><button data-act="slots:1">＋</button></span></span>' +
+        '<span class="cell"><span class="lab">試合</span><span class="stepper"><button data-act="games:-1">−</button><output>' + (e.games - e.played) + "/" + e.games + '</output><button data-act="games:1">＋</button></span></span>' +
+        pips(e) + "</div>" +
+        '<input class="memo" data-act="memo" maxlength="60" placeholder="メモ" value="' + esc(e.memo || "") + '" aria-label="メモ">' +
+        '<div class="ops"><button data-act="up" title="上へ"' + (i === 0 ? " disabled" : "") + '>▲</button>' +
+        '<button data-act="down" title="下へ"' + (i === state.queue.length - 1 ? " disabled" : "") + '>▼</button>' +
+        '<button data-act="del" class="warn" title="削除">✕</button></div></li>';
+    }).join("");
+    if (focus) {
+      var el = ol.querySelector('li[data-id="' + focus.id + '"] [data-act="' + focus.act + '"]');
+      if (el && !el.disabled) { el.focus(); if (focus.sel && el.setSelectionRange) try { el.setSelectionRange(focus.sel[0], focus.sel[1]); } catch (e) {} }
+    }
+    // 位置が変わった区分を元の位置から滑らかに動かす（FLIP）
+    Array.prototype.forEach.call(ol.querySelectorAll("li[data-id]"), function (li, i) {
+      var id = li.dataset.id;
+      if (before[id] == null) return;
+      var dy = before[id] - li.getBoundingClientRect().top;
+      if (Math.abs(dy) > 0.5 && li.animate) li.animate([{ transform: "translateY(" + dy + "px)" }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
+      if (oldIndex[id] !== i && Math.abs(oldIndex[id] - i) === 1 && movedId === id) li.classList.add("moved");
+    });
+    movedId = null;
+  }
+
+  var movedId = null; // ▲▼で動かした区分（光らせる対象）
+
+  function drawSettings() {
+    var st = state.settings;
+    $("tLegend").classList.toggle("on", !!st.showLegend);
+    $("tLegend").textContent = "見方の枠を表示: " + (st.showLegend ? "オン" : "オフ");
+    $("sGames").textContent = st.defaultGames; $("sSlots").textContent = st.defaultSlots;
+  }
+
+  function resetDraft() { draft = { kind: (draft && draft.kind) || "air", slots: state.settings.defaultSlots, games: state.settings.defaultGames }; }
+  function drawDraft() {
+    $("kAir").classList.toggle("on", draft.kind === "air");
+    $("kGround").classList.toggle("on", draft.kind === "ground");
+    $("nSlots").textContent = draft.slots; $("nGames").textContent = draft.games;
+    saveLocal("sortie-draft", draft);
+  }
+
+  // ---- イベント ----
+  $("queue").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-act]"); if (!b) return;
+    var id = b.closest("li").dataset.id, act = b.dataset.act;
+    commit(function (s) {
+      var i = find(id); if (i < 0) return;
+      var e = s.queue[i];
+      if (act === "kind") e.kind = e.kind === "air" ? "ground" : "air";
+      if (act === "up" || act === "down") movedId = id;
+      if (act === "up" && i > 0) { s.queue.splice(i, 1); s.queue.splice(i - 1, 0, e); e.live = false; s.queue[i].live = false; }
+      else if (act === "down" && i < s.queue.length - 1) { s.queue.splice(i, 1); s.queue.splice(i + 1, 0, e); e.live = false; s.queue[i].live = false; }
+      else if (act === "del") s.queue.splice(i, 1);
+      else if (act.indexOf("slots:") === 0) e.slots = clamp(e.slots + +act.split(":")[1], 0, MAX_SLOTS);
+      else if (act.indexOf("games:") === 0) e.games = clamp(e.games + +act.split(":")[1], e.played + 1, MAX_GAMES);
+    });
+  });
+  $("queue").addEventListener("change", function (ev) {
+    var inp = ev.target;
+    if (inp.dataset.act === "memo") {
+      var mid = inp.closest("li").dataset.id, memo = inp.value.trim().slice(0, 60);
+      commit(function (s) { var i = find(mid); if (i >= 0) s.queue[i].memo = memo; }, { quiet: true });
+      return;
+    }
+    if (inp.dataset.act !== "br") return;
+    var id = inp.closest("li").dataset.id, br = fmtBR(inp.value);
+    if (!br) { toast("BRの値が正しくありません"); draw(); return; }
+    commit(function (s) { var i = find(id); if (i >= 0) s.queue[i].br = br; });
+  });
+  $("queue").addEventListener("keydown", function (ev) { if (ev.key === "Enter" && (ev.target.dataset.act === "br" || ev.target.dataset.act === "memo")) ev.target.blur(); });
+
+  $("kAir").onclick = function () { draft.kind = "air"; drawDraft(); };
+  $("kGround").onclick = function () { draft.kind = "ground"; drawDraft(); };
+  document.querySelectorAll("[data-st]").forEach(function (b) {
+    b.onclick = function () {
+      var p = b.dataset.st.split(":");
+      draft[p[0]] = clamp(draft[p[0]] + +p[1], p[0] === "slots" ? 0 : 1, p[0] === "slots" ? MAX_SLOTS : MAX_GAMES);
+      drawDraft();
+    };
+  });
+  document.querySelectorAll("[data-set]").forEach(function (b) {
+    b.onclick = function () {
+      var p = b.dataset.set.split(":");
+      commit(function (s) {
+        s.settings[p[0]] = clamp(s.settings[p[0]] + +p[1], p[0] === "defaultSlots" ? 0 : 1, p[0] === "defaultSlots" ? MAX_SLOTS : MAX_GAMES);
+      });
+      resetDraft(); drawDraft();
+    };
+  });
+  $("tLegend").onclick = function () { commit(function (s) { s.settings.showLegend = !s.settings.showLegend; }); };
+
+  function addFromForm() {
+    var br = fmtBR($("brIn").value);
+    if (!br) { toast("BRを入れてください"); $("brIn").focus(); return; }
+    commit(function (s) { s.queue.push(newEntry(draft.kind, br, draft.slots, draft.games)); });
+    $("brIn").value = "";
+  }
+  $("addOne").onclick = addFromForm;
+  $("brIn").addEventListener("keydown", function (ev) { if (ev.key === "Enter") addFromForm(); });
+
+
+  $("undo").onclick = undo;
+  $("clearAll").onclick = function () { if (state.queue.length && confirm("キューをすべて消しますか？（元に戻すで復元できます）")) commit(function (s) { s.queue = []; }); };
+
+  function copy(text, label) {
+    var p = navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject();
+    p.then(function () { toast(label + "をコピーしました"); }, function () { prompt("コピーしてください", text); });
+  }
+  $("copyText").onclick = function () {
+    copy(state.queue.map(function (e) { return kindName(e.kind) + e.br + "@" + e.slots; }).join(" -> "), "テキスト");
+  };
+  var overlayUrl = location.origin + "/";
+  $("ovUrl").textContent = overlayUrl;
+  $("copyUrl").onclick = function () { copy(overlayUrl, "URL"); };
+
+  document.addEventListener("keydown", function (ev) {
+    var tag = (ev.target.tagName || "").toLowerCase();
+    var typing = tag === "input" || tag === "textarea";
+    if (typing) return;
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); undo(); return; }
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key === " ") { ev.preventDefault(); advance(); }
+    else if (ev.key === "Escape") cancelLive();
+    else if ((ev.key === "ArrowUp" || ev.key === "ArrowDown") && state.queue.length) {
+      ev.preventDefault();
+      var d = ev.key === "ArrowUp" ? 1 : -1;
+      commit(function (s) { s.queue[0].slots = clamp(s.queue[0].slots + d, 0, MAX_SLOTS); });
+    }
+  });
+
+  // 最前面表示（アプリのウィンドウで開いているときだけ使える）
+  if (window.sortieApp) {
+    var pin = $("pinTop");
+    pin.hidden = false;
+    var setPin = function (on) { pin.setAttribute("aria-pressed", on ? "true" : "false"); };
+    window.sortieApp.getAlwaysOnTop().then(setPin);
+    pin.onclick = function () {
+      var next = pin.getAttribute("aria-pressed") !== "true";
+      window.sortieApp.setAlwaysOnTop(next).then(function (on) { setPin(on); toast(on ? "最前面表示: オン" : "最前面表示: オフ"); });
+    };
+  }
+
+  // プレビューの縮小表示
+  function fitPreview() {
+    var w = $("pvWrap").clientWidth, s = Math.min(1, w / 1400);
+    $("preview").style.transform = "scale(" + s + ")";
+    $("pvWrap").style.height = Math.round(250 * s) + "px";
+  }
+  window.addEventListener("resize", fitPreview);
+  $("preview").addEventListener("load", function () { fitPreview(); showPreview(); });
+  fitPreview();
+  if (draft) drawDraft();
+})();
+</script>
+</body>
+</html>

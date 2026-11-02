@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>SortieTicket overlay</title>
+<link rel="stylesheet" href="/fonts/oswald/700.css">
+<link rel="stylesheet" href="/fonts/noto/900.css">
+<style>
+  :root {
+    --air: #1687f2;
+    --ground: #ff6a00;
+    --gauge: #ffd23c;
+    --skew: -20deg;
+    --h: 92px;          /* プレートの高さ */
+    --w: 290px;         /* プレートの幅（全区分で共通にして枠を揃える） */
+    --gap: 12px;        /* 区分どうしの間隔 */
+    --legend-gap: calc(var(--gap) * 3);  /* 見方枠と右側の間隔（通常の3倍） */
+    --gauge-gap: 8px;   /* プレートとゲージの間隔 */
+    --scale: 1;
+    --legend-green: #1fa055;  /* 見方枠「BR / 残参加枠」の背景 */
+    --font-num: "Oswald", "Bahnschrift", "Arial Narrow", Impact, sans-serif;
+    --font-jp: "Oswald", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+  }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body.preview {
+    background-color: #2b2f36;
+    background-image: linear-gradient(45deg, #353a42 25%, transparent 25%), linear-gradient(-45deg, #353a42 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #353a42 75%), linear-gradient(-45deg, transparent 75%, #353a42 75%);
+    background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  }
+  #stage { padding: 24px 48px 20px; transform: scale(var(--scale)); transform-origin: 0 0; display: flex; align-items: flex-start; }
+  #row { display: flex; align-items: flex-start; gap: var(--gap); }
+
+  .entry, .legend { position: relative; flex: 0 0 auto; }
+  .entry { will-change: transform; }
+  .plate {
+    height: var(--h); width: var(--w); box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    transform: skewX(var(--skew)); transform-origin: 0 100%;
+    border: 3px solid rgba(255,255,255,.95);
+    box-shadow: 0 3px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.45);
+    transition: background-color .3s;
+  }
+  .air .plate { background: var(--air); }
+  .ground .plate { background: var(--ground); }
+  .label {
+    transform: skewX(calc(var(--skew) * -1));
+    font-family: var(--font-num);
+    font-weight: 700; font-size: 66px; line-height: 1; color: #fff; white-space: nowrap;
+    letter-spacing: .5px; font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 0 rgba(0,0,0,.35), 0 0 6px rgba(0,0,0,.25);
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  .sep { opacity: .9; }
+  .slots { display: inline-block; min-width: .62em; text-align: center; }
+  .slots.full { opacity: .55; }
+
+  /* ゲージ（残り試合数）。プレートの斜辺の延長線上に来るよう、変形の基準点をプレート下端に合わせる */
+  .gauge { display: flex; gap: 8px; width: var(--w); margin-top: var(--gauge-gap); transform: skewX(var(--skew)); transform-origin: 0 calc(var(--gauge-gap) * -1); }
+  .seg {
+    flex: 1 1 0; height: 13px; background: var(--gauge);
+    box-shadow: 0 0 0 2px rgba(0,0,0,.35), 0 2px 4px rgba(0,0,0,.4);
+    transition: opacity .45s, transform .45s;
+    transform-origin: left center;
+  }
+  .seg.used { opacity: 0; transform: scaleX(.2); }
+  .seg.live { animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
+
+  .now {
+    margin: 8px 0 0 -4px; height: 44px;
+    font-family: var(--font-jp);
+    font-weight: 700; font-size: 40px; line-height: 1; color: var(--gauge); white-space: nowrap;
+    -webkit-text-stroke: 1.5px rgba(0,0,0,.55); paint-order: stroke fill;
+    text-shadow: 0 2px 4px rgba(0,0,0,.5);
+    opacity: 0; transform: translateY(-6px); transition: opacity .35s, transform .35s;
+  }
+  /* Now! は今の試合（ゲージの該当バー）の真下の中央に置く。left は JS で計算 */
+  .entry .now { position: relative; left: 0; width: max-content; margin-left: 0; transform: translate(-50%, -6px); transition: opacity .35s, transform .35s, left .35s ease; }
+  .entry.first .now { opacity: 1; transform: translate(-50%, 0); }
+
+  /* 見方（凡例）枠：左端に固定 */
+  .legend { margin-right: var(--legend-gap); }
+  .legend.hidden { display: none; }
+  .legend .plate { flex-direction: column; align-items: stretch; justify-content: stretch; background: var(--air); overflow: hidden; }
+  .lg-top { display: flex; flex: 0 0 44%; border-bottom: 3px solid rgba(255,255,255,.95); }
+  .lg-top > div { flex: 1 1 0; display: flex; align-items: center; justify-content: center; }
+  .lg-air { background: var(--air); }
+  .lg-ground { background: var(--ground); border-left: 3px solid rgba(255,255,255,.95); }
+  .lg-bottom { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; background: var(--legend-green); }
+  .lg-text {
+    transform: skewX(calc(var(--skew) * -1));
+    color: #fff; font-weight: 700; line-height: 1; white-space: nowrap;
+    text-shadow: 0 2px 0 rgba(0,0,0,.35);
+  }
+  .lg-top .lg-text { font-family: var(--font-num); font-size: 30px; letter-spacing: .5px; }
+  .lg-bottom .lg-text { font-family: var(--font-num); font-size: 30px; display: flex; align-items: center; gap: 8px; }
+  .lg-bottom .jp { font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; font-size: 31px; line-height: 1; }
+  .legend .now { opacity: 1; transform: none; font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; font-size: 34px; }
+
+  .pop { animation: pop .35s ease-out; }
+  @keyframes pop { 0% { transform: scale(1.45); } 100% { transform: scale(1); } }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="legend" id="legend">
+    <div class="plate">
+      <div class="lg-top">
+        <div class="lg-air"><span class="lg-text">Air</span></div>
+        <div class="lg-ground"><span class="lg-text">Ground</span></div>
+      </div>
+      <div class="lg-bottom"><span class="lg-text"><span>BR /</span><span class="jp">残参加枠</span></span></div>
+    </div>
+    <div class="gauge"><i class="seg"></i><i class="seg"></i></div>
+    <div class="now">試合数!!</div>
+  </div>
+  <div id="row"></div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var q = new URLSearchParams(location.search);
+  var preview = q.has("preview");
+  if (preview) document.body.classList.add("preview");
+  if (q.get("scale")) document.documentElement.style.setProperty("--scale", q.get("scale"));
+
+  var row = document.getElementById("row");
+  var legend = document.getElementById("legend");
+  var els = {};          // id -> element
+  var busy = false, pending = null;
+  var LEAVE_MS = 480, MOVE_MS = 420;
+  var EASE = "cubic-bezier(.2,.8,.2,1)";
+
+  function build(e) {
+    var el = document.createElement("div");
+    el.className = "entry";
+    el.innerHTML = '<div class="plate"><div class="label"><span class="br"></span><span class="sep">/</span><span class="slots"></span></div></div>' +
+      '<div class="gauge"></div><div class="now">Now!</div>';
+    el.dataset.id = e.id;
+    return el;
+  }
+
+  function update(el, e, isFirst) {
+    el.classList.toggle("air", e.kind === "air");
+    el.classList.toggle("ground", e.kind !== "air");
+    el.classList.toggle("first", isFirst);
+    var br = el.querySelector(".br"), sl = el.querySelector(".slots");
+    if (br.textContent !== e.br) br.textContent = e.br;
+    var s = String(e.slots);
+    if (sl.textContent !== s) {
+      var had = sl.textContent !== "";
+      sl.textContent = s;
+      if (had) { sl.classList.remove("pop"); void sl.offsetWidth; sl.classList.add("pop"); }
+    }
+    sl.classList.toggle("full", e.slots <= 0);
+    var g = el.querySelector(".gauge");
+    while (g.children.length < e.games) g.appendChild(document.createElement("i")).className = "seg";
+    while (g.children.length > e.games) g.removeChild(g.lastChild);
+    for (var i = 0; i < g.children.length; i++) {
+      g.children[i].className = "seg" + (i < e.played ? " used" : "") + (i === e.played && e.live ? " live" : "");
+    }
+    placeNow(el, e);
+  }
+
+  // Now! を今の試合のバー（played 番目）の中央の真下へ。
+  // offsetLeft は変形（アニメーションや傾き）の影響を受けないので、傾きの分だけ自分で補正する
+  var TAN = Math.tan(20 * Math.PI / 180);
+  function placeNow(el, e) {
+    var seg = el.querySelector(".gauge").children[Math.min(e.played, e.games - 1)];
+    var now = el.querySelector(".now");
+    if (!seg || !now) return;
+    var gaugeGap = parseFloat(getComputedStyle(el).getPropertyValue("--gauge-gap")) || 8;
+    var skewShift = (gaugeGap + seg.offsetHeight / 2) * TAN;  // ゲージは上に向かって右へ傾いている
+    now.style.left = (seg.offsetLeft + seg.offsetWidth / 2 - skewShift) + "px";
+  }
+
+  function rectsOf(ids) {
+    var r = {};
+    ids.forEach(function (id) { if (els[id]) r[id] = els[id].getBoundingClientRect(); });
+    return r;
+  }
+
+  function layout(state, first) {
+    first = first || rectsOf(Object.keys(els));
+    state.queue.forEach(function (e, i) {
+      var el = els[e.id], isNew = !el;
+      if (isNew) el = els[e.id] = build(e);
+      update(el, e, i === 0);
+      row.appendChild(el); // 順番を揃える（既存要素は移動）
+      if (isNew) el.animate([{ opacity: 0, transform: "translateX(60px)" }, { opacity: 1, transform: "none" }], { duration: MOVE_MS, easing: EASE });
+    });
+    Object.keys(first).forEach(function (id) {
+      var el = els[id]; if (!el) return;
+      var r = el.getBoundingClientRect(), a = first[id];
+      var dx = a.left - r.left, dy = a.top - r.top;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        el.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }], { duration: MOVE_MS, easing: EASE });
+      }
+    });
+  }
+
+  function applySettings(st) {
+    legend.classList.toggle("hidden", !(st && st.showLegend));
+  }
+
+  function render(state) {
+    if (!state || !state.queue) return;
+    if (busy) { pending = state; return; }
+    applySettings(state.settings);
+    var ids = {}; state.queue.forEach(function (e) { ids[e.id] = 1; });
+    var leaving = Object.keys(els).filter(function (id) { return !ids[id]; });
+    if (!leaving.length) { layout(state); return; }
+    // 終わった区分は上へスライドして消え、その後に残りを左へ詰める
+    busy = true;
+    leaving.forEach(function (id) {
+      els[id].animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-130%)" }],
+        { duration: LEAVE_MS, easing: "cubic-bezier(.5,0,.75,0)", fill: "forwards" });
+    });
+    setTimeout(function () {
+      var rects = rectsOf(Object.keys(els).filter(function (k) { return leaving.indexOf(k) < 0; }));
+      leaving.forEach(function (id) { els[id].remove(); delete els[id]; });
+      layout(state, rects);
+      setTimeout(function () {
+        busy = false;
+        if (pending) { var p = pending; pending = null; render(p); }
+      }, MOVE_MS);
+    }, LEAVE_MS);
+  }
+
+  // 操作画面のプレビュー（iframe）は postMessage で即時反映
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (ev.origin === location.origin && d && d.type === "sortie-state") render(d.state);
+  });
+
+  // 本番: アプリからの配信（Server-Sent Events。切れても自動で再接続）
+  if (!preview || q.has("live")) {
+    var es = new EventSource("/events");
+    es.addEventListener("state", function (ev) {
+      try { render(JSON.parse(ev.data).state); } catch (e) {}
+    });
+  }
+})();
+</script>
+</body>
+</html>

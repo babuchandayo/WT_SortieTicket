@@ -13,7 +13,7 @@
     "pretest": "npm run fonts",
     "test": "node --test test/*.test.js",
     "predist": "npm run fonts",
-    "dist": "electron-builder --win nsis portable --publish never"
+    "dist": "electron-builder --win portable --publish never"
   },
   "author": "babuchandayo",
   "license": "UNLICENSED",
@@ -30,11 +30,6 @@
       "src/**/*",
       "package.json"
     ],
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "artifactName": "SortieTicket-${version}-setup.${ext}"
-    },
     "portable": {
       "artifactName": "SortieTicket-${version}-portable.${ext}"
     }

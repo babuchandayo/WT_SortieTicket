@@ -51,7 +51,7 @@ npm install
 npm start          # Electron で起動
 npm run serve      # Electron なしでサーバーだけ起動（ブラウザで確認用）
 npm test
-npm run dist       # Windows 用 exe（インストーラー版・ポータブル版）を dist/ に作成
+npm run dist       # Windows 用のポータブル版 exe を dist/ に作成
 ```
 
 GitHub Actions で push のたびに Windows 用 exe をビルドし、Actions の成果物に置きます。

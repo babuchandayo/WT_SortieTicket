@@ -30,12 +30,10 @@
       "src/**/*",
       "package.json"
     ],
-    "win": {
-      "artifactName": "SortieTicket-${version}-${arch}-${target}.${ext}"
-    },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "SortieTicket-${version}-setup.${ext}"
     },
     "portable": {
       "artifactName": "SortieTicket-${version}-portable.${ext}"

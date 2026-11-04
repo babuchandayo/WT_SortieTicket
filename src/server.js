@@ -5,10 +5,15 @@
 //   GET  /events     … 状態の配信（Server-Sent Events）
 //   GET  /api/state  … 現在の状態
 //   PUT  /api/state  … 状態の更新（操作画面から）
+//   GET  /counter                 … 勝敗カウンターのオーバーレイ
+//   GET  /api/counter             … 勝敗カウンターの現在の状態
+//   POST /api/counter/action      … 勝ち/負け/引分の追加・取り消し・リセット
+//   PUT  /api/counter/settings    … 勝敗カウンターの表示設定・ホットキー
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { sanitizeState, defaultState } = require("./state");
+const { sanitizeCounter, sanitizeCounterSettings, defaultCounter, applyAction } = require("./counter");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -38,23 +43,64 @@ function createServer(opts) {
     try { state = sanitizeState(JSON.parse(fs.readFileSync(stateFile, "utf8"))); } catch (e) { /* 初回起動など */ }
   }
 
-  let saveTimer = null;
-  function persist() {
-    if (!stateFile) return;
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      fs.mkdirSync(path.dirname(stateFile), { recursive: true });
-      const tmp = stateFile + ".tmp";
-      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-      fs.renameSync(tmp, stateFile);
-    }, 200);
+  const counterFile = opts.dataDir ? path.join(opts.dataDir, "counter.json") : null;
+  let crev = 0;
+  let counter = defaultCounter();
+  if (counterFile) {
+    try { counter = sanitizeCounter(JSON.parse(fs.readFileSync(counterFile, "utf8"))); } catch (e) { /* 初回起動など */ }
   }
+
+  function writeNow(file, data) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const tmp = file + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+    fs.renameSync(tmp, file);
+  }
+  const timers = {};
+  function saveLater(file, get) {
+    if (!file) return;
+    clearTimeout(timers[file] && timers[file].t);
+    timers[file] = { get, t: setTimeout(() => { delete timers[file]; writeNow(file, get()); }, 200) };
+  }
+  function flushSaves() {
+    for (const file of Object.keys(timers)) { clearTimeout(timers[file].t); writeNow(file, timers[file].get()); delete timers[file]; }
+  }
+  function persist() { saveLater(stateFile, () => state); }
+  function persistCounter() { saveLater(counterFile, () => counter); }
 
   const clients = new Set();
   function payload() { return JSON.stringify({ rev, state }); }
+  function counterPayload() { return JSON.stringify({ rev: crev, counter }); }
   function broadcast() {
     const msg = "event: state\ndata: " + payload() + "\n\n";
     for (const res of clients) res.write(msg);
+  }
+  const counterListeners = new Set();
+  function setCounter(next) {
+    const hotkeysChanged = JSON.stringify(next.settings.hotkeys) !== JSON.stringify(counter.settings.hotkeys);
+    counter = next; crev++;
+    persistCounter();
+    const msg = "event: counter\ndata: " + counterPayload() + "\n\n";
+    for (const res of clients) res.write(msg);
+    for (const fn of counterListeners) { try { fn(counter, { hotkeysChanged }); } catch (e) { /* 通知先の不具合で止めない */ } }
+  }
+  function counterAction(action, src) {
+    const next = applyAction(counter, action, src);
+    if (!next) return false;
+    setCounter(next);
+    return true;
+  }
+
+  function readJson(req, res, cb) {
+    if (!originOk(req)) return send(res, 403, "forbidden");
+    if (!/^application\/json/.test(req.headers["content-type"] || "")) return send(res, 415, "json only");
+    let body = "";
+    req.on("data", (c) => { body += c; if (body.length > 256 * 1024) req.destroy(); });
+    req.on("end", () => {
+      let j;
+      try { j = JSON.parse(body); } catch (e) { return send(res, 400, "bad request"); }
+      cb(j);
+    });
   }
 
   // 他のWebサイトからの書き換えを防ぐため、Origin は自分自身だけ許可する
@@ -85,6 +131,7 @@ function createServer(opts) {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-store", Connection: "keep-alive" });
       res.write("retry: 2000\n");
       res.write("event: state\ndata: " + payload() + "\n\n");
+      res.write("event: counter\ndata: " + counterPayload() + "\n\n");
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
@@ -93,25 +140,41 @@ function createServer(opts) {
     if (p === "/api/state") {
       if (req.method === "GET") return send(res, 200, payload(), "application/json");
       if (req.method === "PUT") {
-        if (!originOk(req)) return send(res, 403, "forbidden");
-        if (!/^application\/json/.test(req.headers["content-type"] || "")) return send(res, 415, "json only");
-        let body = "";
-        req.on("data", (c) => { body += c; if (body.length > 256 * 1024) req.destroy(); });
-        req.on("end", () => {
+        return readJson(req, res, (j) => {
           let next;
-          try { next = sanitizeState(JSON.parse(body).state); } catch (e) { return send(res, 400, "bad request"); }
+          try { next = sanitizeState(j.state); } catch (e) { return send(res, 400, "bad request"); }
           state = next; rev++;
           persist(); broadcast();
           send(res, 200, JSON.stringify({ rev }), "application/json");
         });
-        return;
       }
       return send(res, 405, "method not allowed");
+    }
+
+    if (p === "/api/counter") {
+      if (req.method === "GET") return send(res, 200, counterPayload(), "application/json");
+      return send(res, 405, "method not allowed");
+    }
+    if (p === "/api/counter/action") {
+      if (req.method !== "POST") return send(res, 405, "method not allowed");
+      return readJson(req, res, (j) => {
+        if (!j || !counterAction(String(j.action), "button")) return send(res, 400, "bad request");
+        send(res, 200, JSON.stringify({ rev: crev }), "application/json");
+      });
+    }
+    if (p === "/api/counter/settings") {
+      if (req.method !== "PUT") return send(res, 405, "method not allowed");
+      return readJson(req, res, (j) => {
+        if (!j || !j.settings || typeof j.settings !== "object") return send(res, 400, "bad request");
+        setCounter(Object.assign({}, counter, { settings: sanitizeCounterSettings(j.settings) }));
+        send(res, 200, JSON.stringify({ rev: crev }), "application/json");
+      });
     }
 
     if (req.method !== "GET") return send(res, 405, "method not allowed");
     if (p === "/" || p === "/overlay") return serveFile(res, path.join(publicDir, "overlay.html"));
     if (p === "/control") return serveFile(res, path.join(publicDir, "control.html"));
+    if (p === "/counter") return serveFile(res, path.join(publicDir, "counter.html"));
     return serveFile(res, safeJoin(publicDir, decodeURIComponent(p.slice(1))));
   });
 
@@ -122,6 +185,9 @@ function createServer(opts) {
     server,
     get url() { return "http://127.0.0.1:" + port + "/"; },
     getState: () => ({ rev, state }),
+    getCounter: () => ({ rev: crev, counter }),
+    counterAction,
+    onCounterChange(fn) { counterListeners.add(fn); return () => counterListeners.delete(fn); },
     listen() {
       return new Promise((resolve, reject) => {
         server.once("error", reject);
@@ -132,7 +198,7 @@ function createServer(opts) {
       clearInterval(ping);
       for (const res of clients) res.end();
       clients.clear();
-      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; if (stateFile) fs.writeFileSync(stateFile, JSON.stringify(state, null, 2)); }
+      flushSaves();
       return new Promise((r) => { server.close(() => r()); server.closeAllConnections(); });
     },
   };

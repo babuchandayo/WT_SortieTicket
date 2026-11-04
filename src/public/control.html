@@ -89,6 +89,42 @@
   .empty { color: var(--muted); text-align: center; padding: 14px; }
   .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: #2a313b; border: 1px solid #3a4350; padding: 8px 14px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 90vw; }
   .toast.show { opacity: 1; }
+
+  /* タブ */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding: 0 2px; }
+  .tabs button { border: 1px solid transparent; border-bottom: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); padding: 7px 14px; font-weight: 600; margin-bottom: -1px; }
+  .tabs button:hover { background: #20262e; color: var(--text); }
+  .tabs button[aria-selected="true"] { background: var(--panel); border-color: var(--line); color: var(--text); box-shadow: inset 0 2px 0 var(--gauge); }
+  .tabpanel { display: grid; gap: 12px; }
+  .tabpanel[hidden] { display: none; }
+
+  /* 勝敗カウンター */
+  .score { display: flex; gap: 10px; align-items: stretch; margin-bottom: 10px; }
+  .score > div { flex: 1 1 0; text-align: center; border-radius: 8px; padding: 6px 4px; background: #181c22; border: 1px solid var(--line); }
+  .score .n { display: block; font-size: 30px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .score .l { font-size: 11px; color: var(--muted); letter-spacing: .05em; }
+  .score .w .n { color: #4fd487; } .score .lo .n { color: #ff7b7f; } .score .d .n { color: #aab3bf; } .score .r .n { color: var(--gauge); }
+  .btn-win { background: #1a5a37; border-color: #2a8a55; } .btn-win:hover { background: #217044; }
+  .btn-lose { background: #5e2427; border-color: #8a3439; } .btn-lose:hover { background: #732c30; }
+  .act-row button { font-weight: 700; padding: 9px 12px; }
+  .act-row kbd { margin-left: 4px; opacity: .8; }
+  .designs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .designs button { padding: 8px 6px; text-align: center; display: grid; gap: 2px; }
+  .designs button b { font-size: 13px; }
+  .designs button span { font-size: 11px; color: var(--muted); }
+  .designs button.on { background: #24324a; border-color: #4b8cff; box-shadow: 0 0 0 1px #4b8cff inset; }
+  .cpreview-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); position: relative; height: 200px; }
+  .cpreview-wrap iframe { border: 0; width: 640px; height: 300px; transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+  table.hk { width: 100%; border-collapse: collapse; }
+  table.hk td { padding: 4px 4px; vertical-align: middle; }
+  table.hk td:first-child { width: 8.5em; white-space: nowrap; }
+  .hk-in { width: 100%; max-width: 220px; font-family: Consolas, monospace; cursor: pointer; text-align: center; caret-color: transparent; }
+  .hk-in.capturing { border-color: var(--gauge); color: var(--gauge); }
+  .hk-st { font-size: 12px; white-space: nowrap; }
+  .hk-st.ok { color: var(--ok); } .hk-st.ng { color: var(--ng); }
+  .reset-row { display: flex; justify-content: center; padding: 6px 0 12px; }
+  .reset-row button { padding: 9px 22px; }
+  @media (max-width: 420px) { .designs { grid-template-columns: 1fr; } }
   @media (max-width: 560px) {
     ol#queue li { grid-template-columns: 28px 60px 1fr auto; }
   }
@@ -101,6 +137,13 @@
     <button class="pin" id="pinTop" aria-pressed="false" hidden title="このウィンドウを常に他のウィンドウより前に表示">📌 最前面表示</button>
     <span class="grow"></span><span class="dot" id="dot"></span><span class="muted" id="connText">接続中…</span>
   </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" id="tabBtn-rank" aria-controls="tab-rank" aria-selected="true">分隊ランク</button>
+    <button role="tab" id="tabBtn-counter" aria-controls="tab-counter" aria-selected="false">勝敗カウンター</button>
+  </nav>
+
+  <div class="tabpanel" id="tab-rank" role="tabpanel">
 
   <section id="nowCard"></section>
 
@@ -153,6 +196,73 @@
   <section class="muted">
     ショートカット（入力欄の外で）: <kbd>Space</kbd> 試合開始 → 試合終了 ／ <kbd>Esc</kbd> 開始を取り消し ／ <kbd>↑</kbd><kbd>↓</kbd> 先頭の残参加枠 ± ／ <kbd>Ctrl</kbd>+<kbd>Z</kbd> 元に戻す
   </section>
+  </div>
+
+  <div class="tabpanel" id="tab-counter" role="tabpanel" hidden>
+    <section>
+      <h2>戦績</h2>
+      <div class="score">
+        <div class="w"><span class="n" id="cWins">0</span><span class="l">勝ち</span></div>
+        <div class="lo"><span class="n" id="cLosses">0</span><span class="l">負け</span></div>
+        <div class="d"><span class="n" id="cDraws">0</span><span class="l">引分</span></div>
+        <div class="r"><span class="n" id="cRate">--%</span><span class="l">勝率</span></div>
+      </div>
+      <div class="row act-row">
+        <button class="btn-win" data-cact="win">勝ち追加</button>
+        <button class="btn-lose" data-cact="loss">負け追加</button>
+        <button data-cact="draw">引分追加</button>
+        <button data-cact="undo">直前の1件を取り消し</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="toggle" data-ctog="showRate"></button>
+        <button class="toggle" data-ctog="showRateLabel"></button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="toggle" data-ctog="showRecent"></button>
+        <span class="cell"><span class="lab">試合数</span><span class="stepper"><button data-crecent="-1">−</button><output id="cRecentN"></output><button data-crecent="1">＋</button></span></span>
+      </div>
+      <p class="muted" style="margin:6px 0 0" id="cRecentHelp"></p>
+      <p style="margin:8px 0 0" id="cLast">直前の記録: なし</p>
+      <p class="muted" style="margin:4px 0 0">勝率は 勝ち ÷（勝ち＋負け）で計算します（引分は含めません）。</p>
+    </section>
+
+    <section>
+      <h2>見た目</h2>
+      <div class="designs" id="cDesigns">
+        <button data-design="plate"><b>A プレート2枚</b><span>勝ち/負けを並べた札</span></button>
+        <button data-design="wide"><b>B ワイド＋勝率札</b><span>スコアボード風</span></button>
+        <button data-design="split"><b>C 見方枠風</b><span>上下2段の1枚札</span></button>
+      </div>
+    </section>
+
+    <section>
+      <h2>プレビュー（配信に映る見た目）</h2>
+      <div class="cpreview-wrap" id="cpvWrap"><iframe id="cpreview" src="/counter?preview" title="勝敗カウンターのプレビュー"></iframe></div>
+    </section>
+
+    <section>
+      <h2>ホットキー</h2>
+      <table class="hk">
+        <tr><td>勝ち追加</td><td><input class="hk-in" data-hk="win" readonly></td><td class="hk-st" data-hkst="win"></td></tr>
+        <tr><td>負け追加</td><td><input class="hk-in" data-hk="loss" readonly></td><td class="hk-st" data-hkst="loss"></td></tr>
+        <tr><td>引分追加</td><td><input class="hk-in" data-hk="draw" readonly></td><td class="hk-st" data-hkst="draw"></td></tr>
+        <tr><td>直前の取り消し</td><td><input class="hk-in" data-hk="undo" readonly></td><td class="hk-st" data-hkst="undo"></td></tr>
+      </table>
+      <p class="muted" style="margin:8px 0 0" id="hkHelp">欄をクリックして新しいキーを押すと変更できます（Esc で中止、Backspace で割り当てなし）。Ctrl / Alt / Shift のどれかとの組み合わせか、F1〜F24 が使えます。</p>
+      <div class="row" style="margin-top:6px"><button id="hkDefault">初期値に戻す</button></div>
+    </section>
+
+    <section>
+      <h2>オーバーレイ URL</h2>
+      <div class="row">
+        <span class="url grow" id="cUrl"></span>
+        <button id="copyCUrl" class="primary">コピー</button>
+      </div>
+      <p class="muted" style="margin:8px 0 0">OBS のブラウザソースにこの URL を貼り付けてください（「ローカルファイル」はチェックを外す）。幅 640 / 高さ 300 から調整してください。</p>
+    </section>
+
+    <div class="reset-row"><button id="cReset" class="warn">戦績をリセット</button></div>
+  </div>
 </main>
 <div class="toast" id="toast"></div>
 
@@ -398,8 +508,8 @@
   document.addEventListener("keydown", function (ev) {
     var tag = (ev.target.tagName || "").toLowerCase();
     var typing = tag === "input" || tag === "textarea";
-    if (typing) return;
-    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "z") { ev.preventDefault(); undo(); return; }
+    if (typing || activeTab !== "rank") return;
+    if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === "z") { ev.preventDefault(); undo(); return; }
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     if (ev.key === " ") { ev.preventDefault(); advance(); }
     else if (ev.key === "Escape") cancelLive();
@@ -409,6 +519,184 @@
       commit(function (s) { s.queue[0].slots = clamp(s.queue[0].slots + d, 0, MAX_SLOTS); });
     }
   });
+
+
+  // ==== タブ ====
+  var activeTab = loadLocal("sortie-tab", "rank") === "counter" ? "counter" : "rank";
+  function showTab(name) {
+    activeTab = name;
+    ["rank", "counter"].forEach(function (t) {
+      $("tab-" + t).hidden = t !== name;
+      $("tabBtn-" + t).setAttribute("aria-selected", t === name ? "true" : "false");
+    });
+    saveLocal("sortie-tab", name);
+    if (name === "rank") fitPreview(); else fitCPreview();
+  }
+  $("tabBtn-rank").onclick = function () { showTab("rank"); };
+  $("tabBtn-counter").onclick = function () { showTab("counter"); };
+
+  // ==== 勝敗カウンター ====
+  var HK_NAMES = ["win", "loss", "draw", "undo"];
+  var HK_DEFAULT = { win: "Ctrl+Alt+W", loss: "Ctrl+Alt+L", draw: "Ctrl+Alt+D", undo: "Ctrl+Alt+Z" };
+  var RES_NAME = { W: "勝ち", L: "負け", D: "引分" };
+  var counter = null, crev = -1, hkStatus = null;
+  var TOG_LABEL = { showRate: "勝率表示", showRateLabel: "WIN RATEの文字を表示", showRecent: "直近の戦績を表示" };
+
+  es.addEventListener("counter", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (d.rev < crev) return;
+    crev = d.rev; counter = d.counter;
+    drawCounter();
+  });
+
+  function cpost(url, method, body) {
+    return fetch(url, { method: method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); })
+      .catch(function () { toast("保存できませんでした。アプリが起動しているか確認してください"); });
+  }
+  function caction(a) { return cpost("/api/counter/action", "POST", { action: a }); }
+  function csettings(mut) {
+    if (!counter) { toast("読み込み中です"); return; }
+    var st = JSON.parse(JSON.stringify(counter.settings));
+    mut(st);
+    return cpost("/api/counter/settings", "PUT", { settings: st });
+  }
+
+  function drawCounter() {
+    if (!counter) return;
+    var w = 0, l = 0, d = 0;
+    counter.results.forEach(function (r) { if (r === "W") w++; else if (r === "L") l++; else d++; });
+    $("cWins").textContent = w; $("cLosses").textContent = l; $("cDraws").textContent = d;
+    $("cRate").textContent = w + l ? Math.round(w / (w + l) * 100) + "%" : "--%";
+    var st = counter.settings;
+    document.querySelectorAll("[data-ctog]").forEach(function (b) {
+      var k = b.dataset.ctog;
+      b.classList.toggle("on", !!st[k]);
+      b.textContent = TOG_LABEL[k] + ": " + (st[k] ? "オン" : "オフ");
+    });
+    $("cRecentN").textContent = st.recentCount;
+    $("cRecentHelp").textContent = "直近 " + st.recentCount + " 試合の勝敗を表示します。戦績をリセットすると空欄に戻ります。";
+    document.querySelectorAll("#cDesigns [data-design]").forEach(function (b) { b.classList.toggle("on", b.dataset.design === st.design); });
+    var last = counter.last, src = last && last.src === "hotkey" ? "ホットキー" : "手動";
+    $("cLast").textContent = !last ? "直前の記録: なし"
+      : last.op === "add" ? "直前の記録: " + RES_NAME[last.r] + "（" + src + "）"
+      : last.op === "undo" ? "直前の操作: 取り消し" + (last.r ? "（" + RES_NAME[last.r] + "を削除）" : "（リセット前の戦績に戻しました）") + "（" + src + "）"
+      : "直前の操作: リセット（直前の1件を取り消しで元に戻せます）";
+    drawHotkeys();
+  }
+
+  document.querySelectorAll("[data-cact]").forEach(function (b) { b.onclick = function () { caction(b.dataset.cact); }; });
+  document.querySelectorAll("[data-ctog]").forEach(function (b) { b.onclick = function () { csettings(function (st) { st[b.dataset.ctog] = !st[b.dataset.ctog]; }); }; });
+  document.querySelectorAll("[data-crecent]").forEach(function (b) { b.onclick = function () { csettings(function (st) { st.recentCount = clamp(st.recentCount + +b.dataset.crecent, 5, 20); }); }; });
+  document.querySelectorAll("#cDesigns [data-design]").forEach(function (b) { b.onclick = function () { csettings(function (st) { st.design = b.dataset.design; }); }; });
+  $("cReset").onclick = function () {
+    if (!counter || (!counter.results.length)) { toast("戦績は空です"); return; }
+    if (confirm("戦績をリセットしますか？（直後なら「直前の1件を取り消し」で戻せます）")) caction("reset");
+  };
+  var counterUrl = location.origin + "/counter";
+  $("cUrl").textContent = counterUrl;
+  $("copyCUrl").onclick = function () { copy(counterUrl, "URL"); };
+
+  // ---- ホットキーの表示と変更 ----
+  var capturing = null;
+  function drawHotkeys() {
+    if (!counter) return;
+    var keys = counter.settings.hotkeys;
+    document.querySelectorAll("[data-hk]").forEach(function (inp) {
+      if (inp === capturing) return;
+      inp.value = keys[inp.dataset.hk] || "（なし）";
+    });
+    document.querySelectorAll("[data-hkst]").forEach(function (td) {
+      var k = td.dataset.hkst, info = hkStatus && hkStatus[k];
+      if (!window.sortieApp) { td.className = "hk-st"; td.textContent = ""; return; }
+      if (!keys[k]) { td.className = "hk-st"; td.textContent = "割り当てなし"; return; }
+      if (!info || info.key !== keys[k]) { td.className = "hk-st"; td.textContent = "登録中…"; return; }
+      td.className = "hk-st " + (info.ok ? "ok" : "ng");
+      td.textContent = info.ok ? "✓ 有効" : "✕ 他のアプリが使用中";
+    });
+  }
+  var CODE_KEY = { Minus: "-", Equal: "=", BracketLeft: "[", BracketRight: "]", Backslash: "\\", Semicolon: ";", Quote: "'", Comma: ",", Period: ".", Slash: "/", Backquote: "`",
+    ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown", Insert: "Insert", Delete: "Delete",
+    Backspace: "Backspace", Tab: "Tab", Space: "Space", NumpadAdd: "numadd", NumpadSubtract: "numsub", NumpadMultiply: "nummult", NumpadDivide: "numdiv", NumpadDecimal: "numdec" };
+  function codeToKey(code) {
+    var m;
+    if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
+    if ((m = /^Digit([0-9])$/.exec(code))) return m[1];
+    if ((m = /^Numpad([0-9])$/.exec(code))) return "num" + m[1];
+    if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+    return CODE_KEY[code] || null;
+  }
+  function accelOf(ev) {
+    var key = codeToKey(ev.code);
+    if (!key) return null;
+    var mods = [];
+    if (ev.ctrlKey) mods.push("Ctrl");
+    if (ev.altKey) mods.push("Alt");
+    if (ev.shiftKey) mods.push("Shift");
+    if (ev.metaKey) mods.push("Super");
+    return { accel: mods.concat(key).join("+"), hasMod: mods.length > 0, fkey: /^F\d+$/.test(key) };
+  }
+  function stopCapture() {
+    if (!capturing) return;
+    capturing.classList.remove("capturing");
+    capturing = null;
+    if (window.sortieApp && window.sortieApp.pauseHotkeys) window.sortieApp.pauseHotkeys(false);
+    drawHotkeys();
+  }
+  document.querySelectorAll("[data-hk]").forEach(function (inp) {
+    inp.addEventListener("focus", function () {
+      capturing = inp;
+      inp.classList.add("capturing");
+      inp.value = "キーを押してください…";
+      if (window.sortieApp && window.sortieApp.pauseHotkeys) window.sortieApp.pauseHotkeys(true);
+    });
+    inp.addEventListener("blur", stopCapture);
+    inp.addEventListener("keydown", function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (["Control", "Alt", "Shift", "Meta"].indexOf(ev.key) >= 0) return;
+      var name = inp.dataset.hk;
+      if (!ev.ctrlKey && !ev.altKey && !ev.shiftKey && !ev.metaKey) {
+        if (ev.key === "Escape") { inp.blur(); return; }
+        if (ev.key === "Backspace" || ev.key === "Delete") { csettings(function (st) { st.hotkeys[name] = ""; }); inp.blur(); return; }
+      }
+      var a = accelOf(ev);
+      if (!a) { toast("このキーは使えません"); return; }
+      if (!a.hasMod && !a.fkey) { toast("Ctrl / Alt / Shift のどれかと組み合わせてください（F1〜F24 は単独でも可）"); return; }
+      var keys = counter.settings.hotkeys;
+      for (var i = 0; i < HK_NAMES.length; i++) {
+        if (HK_NAMES[i] !== name && keys[HK_NAMES[i]] === a.accel) { toast(a.accel + " は他の操作に割り当て済みです"); return; }
+      }
+      csettings(function (st) { st.hotkeys[name] = a.accel; });
+      inp.blur();
+    });
+  });
+  $("hkDefault").onclick = function () { csettings(function (st) { st.hotkeys = JSON.parse(JSON.stringify(HK_DEFAULT)); }); };
+
+  if (window.sortieApp && window.sortieApp.getHotkeyStatus) {
+    window.sortieApp.getHotkeyStatus().then(function (s) { hkStatus = s; drawHotkeys(); });
+    window.sortieApp.onHotkeyStatus(function (s) { hkStatus = s; drawHotkeys(); });
+    $("hkHelp").textContent = "SortieTicket のウィンドウが前面になくても（ゲーム中でも）反応します。" + $("hkHelp").textContent;
+  } else {
+    // ブラウザや OBS ドックで開いているときは、このページにフォーカスがある間だけ効く
+    $("hkHelp").textContent = "このページ（ブラウザ／OBS ドック）では、ページを操作している間だけ反応します。ゲーム中も使うには SortieTicket アプリのウィンドウを起動しておいてください。" + $("hkHelp").textContent;
+    document.addEventListener("keydown", function (ev) {
+      if (!counter || capturing) return;
+      var a = accelOf(ev); if (!a) return;
+      var keys = counter.settings.hotkeys;
+      for (var i = 0; i < HK_NAMES.length; i++) {
+        if (keys[HK_NAMES[i]] && keys[HK_NAMES[i]] === a.accel) { ev.preventDefault(); caction(HK_NAMES[i]); return; }
+      }
+    }, true);
+  }
+
+  function fitCPreview() {
+    var w = $("cpvWrap").clientWidth; if (!w) return;
+    var s = Math.min(1, w / 640);
+    $("cpreview").style.transform = "scale(" + s + ")";
+    $("cpvWrap").style.height = Math.round(300 * s) + "px";
+  }
+  window.addEventListener("resize", fitCPreview);
+  $("cpreview").addEventListener("load", fitCPreview);
 
   // 最前面表示（アプリのウィンドウで開いているときだけ使える）
   if (window.sortieApp) {
@@ -430,7 +718,7 @@
   }
   window.addEventListener("resize", fitPreview);
   $("preview").addEventListener("load", function () { fitPreview(); showPreview(); });
-  fitPreview();
+  showTab(activeTab);
   if (draft) drawDraft();
 })();
 </script>

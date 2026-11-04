@@ -1,6 +1,6 @@
 "use strict";
 // Electron のエントリーポイント。ローカルサーバーを起動し、操作画面をウィンドウで開く。
-const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain, globalShortcut } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const { createServer } = require("./server");
@@ -83,6 +83,29 @@ if (!app.requestSingleInstanceLock()) {
       writeConfig(configFile, Object.assign(readConfig(configFile), { alwaysOnTop: win.isAlwaysOnTop() }));
       return win.isAlwaysOnTop();
     });
+    // 勝敗カウンターのグローバルホットキー（このウィンドウが前面になくても受け付ける）
+    let hotkeyStatus = {};
+    function registerHotkeys(keys) {
+      globalShortcut.unregisterAll();
+      hotkeyStatus = {};
+      for (const name of Object.keys(keys)) {
+        const acc = keys[name];
+        if (!acc) { hotkeyStatus[name] = { key: "", ok: true }; continue; }
+        let ok = false;
+        try { ok = globalShortcut.register(acc, () => srv.counterAction(name, "hotkey")); } catch (e) { ok = false; }
+        hotkeyStatus[name] = { key: acc, ok };
+      }
+      if (win) win.webContents.send("hotkeys:status", hotkeyStatus);
+    }
+    registerHotkeys(srv.getCounter().counter.settings.hotkeys);
+    srv.onCounterChange((c, info) => { if (info.hotkeysChanged) registerHotkeys(c.settings.hotkeys); });
+    ipcMain.handle("hotkeys:status", (e) => (fromWin(e) ? hotkeyStatus : {}));
+    // 割り当て変更のキー入力中は、既存のホットキーが反応しないよう一時的に外す
+    ipcMain.handle("hotkeys:pause", (e, on) => {
+      if (!fromWin(e)) return;
+      if (on === true) globalShortcut.unregisterAll(); else registerHotkeys(srv.getCounter().counter.settings.hotkeys);
+    });
+
     // 外部リンクは既定のブラウザで開く
     win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
     win.loadURL(srv.url + "control?app=1");
@@ -90,5 +113,6 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("window-all-closed", () => app.quit());
+  app.on("will-quit", () => globalShortcut.unregisterAll());
   app.on("before-quit", () => { if (srv) srv.close(); });
 }

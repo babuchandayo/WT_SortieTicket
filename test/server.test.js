@@ -54,7 +54,7 @@ test("サーバー: 状態の更新・配信・保存", async (t) => {
   t.after(() => srv.close());
 
   // ページとフォント
-  for (const p of ["/", "/control", "/fonts/oswald/700.css", "/fonts/noto/900.css", "/fonts/oswald/files/oswald-latin-700-normal.woff2"]) {
+  for (const p of ["/", "/control", "/counter", "/fonts/oswald/700.css", "/fonts/noto/900.css", "/fonts/oswald/files/oswald-latin-700-normal.woff2"]) {
     const r = await fetch(base + p);
     assert.strictEqual(r.status, 200, p);
   }
@@ -65,7 +65,7 @@ test("サーバー: 状態の更新・配信・保存", async (t) => {
   }
 
   const events = [];
-  const sse = await readSSE((e) => events.push(e));
+  const sse = await readSSE((e) => { if (e.state) events.push(e); }); // 勝敗カウンターの配信は除く
   t.after(() => sse.destroy());
 
   const state = { queue: [{ id: "x1", kind: "air", br: "15.0", slots: 3, games: 2, played: 0, live: true, memo: "〇〇さん" }], settings: { showLegend: true, defaultGames: 2, defaultSlots: 3 } };

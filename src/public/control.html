@@ -124,6 +124,45 @@
   .hk-st.ok { color: var(--ok); } .hk-st.ng { color: var(--ng); }
   .reset-row { display: flex; justify-content: center; padding: 6px 0 12px; }
   .reset-row button { padding: 9px 22px; }
+  /* 告知スライド */
+  .add-row button { font-weight: 600; }
+  ol#slides { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  ol#slides li { display: flex; gap: 8px; align-items: center; padding: 7px 8px; border-radius: 8px; background: #181c22; border: 1px solid var(--line); cursor: pointer; }
+  ol#slides li.sel { border-color: #4b8cff; box-shadow: 0 0 0 1px #4b8cff inset; background: #1b2230; }
+  ol#slides li.off .sum { opacity: .45; text-decoration: line-through; }
+  ol#slides li.moved { animation: moved .9s ease-out; }
+  .sw { width: 38px; height: 22px; border-radius: 11px; padding: 0; position: relative; background: #39404a; border-color: #4a525e; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #c9d1db; transition: left .15s; }
+  .sw.on { background: #1f7a4a; border-color: #2f9a62; }
+  .sw.on::after { left: 18px; background: #fff; }
+  .tpl-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: #2a313b; color: #c9d1db; white-space: nowrap; flex: none; }
+  .tpl-badge.text { background: #33402a; color: #c8f0a0; } .tpl-badge.sns { background: #2d3266; color: #c3c8ff; }
+  .tpl-badge.image { background: #4a3a1a; color: #ffd98a; } .tpl-badge.imagetext { background: #3e2a4a; color: #e9c3ff; }
+  .sum { flex: 1 1 0; width: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sum .warn-t { color: var(--ng); font-size: 12px; margin-left: 6px; }
+  .secs { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ed-grid { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px 10px; align-items: center; }
+  .ed-grid > label, .ed-grid > .lab2 { color: var(--muted); font-size: 12px; }
+  .ed-grid input[type=text], .ed-grid textarea { width: 100%; }
+  textarea { font: inherit; color: var(--text); background: #12151a; border: 1px solid #3a4350; border-radius: 7px; padding: 6px 8px; resize: vertical; min-height: 58px; }
+  textarea:focus { outline: 2px solid #4b8cff; outline-offset: 1px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips button { width: 30px; height: 26px; padding: 0; border: 2px solid transparent; transform: skewX(-12deg); }
+  .chips button.on { border-color: #fff; box-shadow: 0 0 0 2px #4b8cff; }
+  .seg2 { display: inline-flex; flex-wrap: wrap; border: 1px solid #3a4350; border-radius: 7px; overflow: hidden; }
+  .seg2 button { border: 0; border-radius: 0; padding: 5px 12px; background: #20262e; }
+  .seg2 button + button { border-left: 1px solid #3a4350; }
+  .seg2 button.on { background: #2f6fe0; }
+  .drop { border: 2px dashed #3a4350; border-radius: 8px; padding: 10px; display: flex; gap: 10px; align-items: center; cursor: pointer; min-height: 64px; background: #12151a; }
+  .drop.over { border-color: var(--gauge); background: #2a2614; }
+  .drop img { max-width: 120px; max-height: 70px; object-fit: contain; background: repeating-conic-gradient(#2b2f36 0 25%, #353a42 0 50%) 0 0 / 12px 12px; border-radius: 4px; }
+  .drop .muted { flex: 1 1 auto; }
+  .ppreview-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); position: relative; height: 220px; }
+  .ppreview-wrap iframe { border: 0; width: 1000px; height: 450px; transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+  .align-grid { display: inline-grid; grid-template-columns: repeat(3, 30px); gap: 3px; vertical-align: middle; }
+  .align-grid button { width: 30px; height: 22px; padding: 0; font-size: 11px; }
+  .align-grid button.on { background: #2f6fe0; border-color: #2f6fe0; }
+  @media (max-width: 480px) { .ed-grid { grid-template-columns: 1fr; } }
   @media (max-width: 420px) { .designs { grid-template-columns: 1fr; } }
   @media (max-width: 560px) {
     ol#queue li { grid-template-columns: 28px 60px 1fr auto; }
@@ -141,6 +180,7 @@
   <nav class="tabs" role="tablist">
     <button role="tab" id="tabBtn-rank" aria-controls="tab-rank" aria-selected="true">分隊ランク</button>
     <button role="tab" id="tabBtn-counter" aria-controls="tab-counter" aria-selected="false">勝敗カウンター</button>
+    <button role="tab" id="tabBtn-promo" aria-controls="tab-promo" aria-selected="false">告知スライド</button>
   </nav>
 
   <div class="tabpanel" id="tab-rank" role="tabpanel">
@@ -262,6 +302,61 @@
     </section>
 
     <div class="reset-row"><button id="cReset" class="warn">戦績をリセット</button></div>
+  </div>
+
+  <div class="tabpanel" id="tab-promo" role="tabpanel" hidden>
+    <section>
+      <div class="row">
+        <button class="toggle" id="pOn"></button>
+        <span class="muted grow" id="pSummary"></span>
+      </div>
+    </section>
+
+    <section>
+      <h2>スライド（上から順に流れます）</h2>
+      <div class="row add-row">
+        <button data-padd="text">＋ テキスト告知</button>
+        <button data-padd="sns">＋ SNS・Discord 誘導</button>
+        <button data-padd="image">＋ 画像</button>
+        <button data-padd="imagetext">＋ 画像＋テキスト</button>
+      </div>
+      <ol id="slides"></ol>
+    </section>
+
+    <section id="pEditor"></section>
+
+    <section>
+      <div class="row" style="margin-bottom:8px">
+        <h2 style="margin:0">プレビュー（配信に映る見た目）</h2><span class="grow"></span>
+        <div class="seg2" id="pvMode"><button data-pv="one">選択中のスライド</button><button data-pv="all">通して再生</button></div>
+      </div>
+      <div class="ppreview-wrap" id="ppvWrap"><iframe id="ppreview" src="/promo?preview" title="告知スライドのプレビュー"></iframe></div>
+    </section>
+
+    <section>
+      <h2>表示設定</h2>
+      <div class="ed-grid">
+        <span class="lab2">切り替え方</span>
+        <div><div class="seg2" id="pTrans"><button data-v="fade">フェード</button><button data-v="slide">スライド</button><button data-v="none">なし</button></div></div>
+        <span class="lab2">1周後に隠す</span>
+        <div class="row"><span class="stepper"><button data-pgap="-1">−</button><output id="pGap"></output><button data-pgap="1">＋</button></span><span class="muted" id="pGapHelp"></span></div>
+        <span class="lab2">残り時間のバー</span>
+        <div><button class="toggle" id="pBar"></button></div>
+        <span class="lab2">全体の大きさ</span>
+        <div class="row"><span class="stepper"><button data-pscale="-10">−</button><output id="pScale"></output><button data-pscale="10">＋</button></span></div>
+        <span class="lab2">配置</span>
+        <div class="row"><div class="align-grid" id="pAlign"></div><span class="muted">ブラウザソースの枠の中で寄せる位置</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>オーバーレイ URL</h2>
+      <div class="row">
+        <span class="url grow" id="pUrl"></span>
+        <button id="copyPUrl" class="primary">コピー</button>
+      </div>
+      <p class="muted" style="margin:8px 0 0">OBS のブラウザソースにこの URL を貼り付けてください（「ローカルファイル」はチェックを外す）。幅 1000 / 高さ 450 から調整してください。背景は透過です。</p>
+    </section>
   </div>
 </main>
 <div class="toast" id="toast"></div>
@@ -522,18 +617,18 @@
 
 
   // ==== タブ ====
-  var activeTab = loadLocal("sortie-tab", "rank") === "counter" ? "counter" : "rank";
+  var TABS = ["rank", "counter", "promo"];
+  var activeTab = TABS.indexOf(loadLocal("sortie-tab", "rank")) >= 0 ? loadLocal("sortie-tab", "rank") : "rank";
   function showTab(name) {
     activeTab = name;
-    ["rank", "counter"].forEach(function (t) {
+    TABS.forEach(function (t) {
       $("tab-" + t).hidden = t !== name;
       $("tabBtn-" + t).setAttribute("aria-selected", t === name ? "true" : "false");
     });
     saveLocal("sortie-tab", name);
-    if (name === "rank") fitPreview(); else fitCPreview();
+    if (name === "rank") fitPreview(); else if (name === "counter") fitCPreview(); else fitPPreview();
   }
-  $("tabBtn-rank").onclick = function () { showTab("rank"); };
-  $("tabBtn-counter").onclick = function () { showTab("counter"); };
+  TABS.forEach(function (t) { $("tabBtn-" + t).onclick = function () { showTab(t); }; });
 
   // ==== 勝敗カウンター ====
   var HK_NAMES = ["win", "loss", "draw", "undo"];
@@ -697,6 +792,311 @@
   }
   window.addEventListener("resize", fitCPreview);
   $("cpreview").addEventListener("load", fitCPreview);
+
+  // ==== 告知スライド ====
+  var promo = null, prev = -1, pInflight = 0, selId = loadLocal("sortie-promo-sel", null);
+  var pvMode = loadLocal("sortie-promo-pv", "one") === "all" ? "all" : "one";
+  var TPL_NAME = { text: "テキスト", sns: "SNS", image: "画像", imagetext: "画像＋文" };
+  var SERVICES = [["discord", "Discord"], ["x", "X"], ["youtube", "YouTube"], ["twitch", "Twitch"], ["tiktok", "TikTok"], ["other", "その他"]];
+  var SERVICE_NAME = {}; SERVICES.forEach(function (s) { SERVICE_NAME[s[0]] = s[0] === "other" ? "" : s[1]; });
+  var COLORS = [["dark", "#1b2330", "濃紺"], ["air", "#1687f2", "青（空）"], ["ground", "#ff6a00", "オレンジ（陸）"], ["green", "#1fa055", "緑"], ["yellow", "#ffd23c", "黄"], ["red", "#e5484d", "赤"], ["purple", "#8a4dff", "紫"]];
+  var PRESET = {
+    text: { title: "分隊参加はお気軽に!!", body: "リクエストもお待ちしてます!!", style: "plain", color: "dark" },
+    sns: { service: "discord", title: "", sub: "招待リンクは概要欄へ", body: "" },
+    image: { title: "", size: 100, frame: false },
+    imagetext: { title: "タイトル", body: "本文", color: "dark", size: 100 },
+  };
+  var IMG_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+  function slideById(id) { if (!promo) return null; for (var i = 0; i < promo.slides.length; i++) if (promo.slides[i].id === id) return promo.slides[i]; return null; }
+  function pIndex(id) { for (var i = 0; i < promo.slides.length; i++) if (promo.slides[i].id === id) return i; return -1; }
+  function playable(s) {
+    if (s.tpl === "image") return !!s.image;
+    if (s.tpl === "imagetext") return !!(s.image || s.title || s.body);
+    if (s.tpl === "sns") return true;
+    return !!(s.title || s.body);
+  }
+
+  var pPending = false;   // 送信待ちの文字入力がある
+  function pPushNow() {
+    clearTimeout(pPushNow.t);
+    if (pPending) { pPending = false; pInflight--; }
+    pInflight++;
+    return fetch("/api/promo", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ promo: promo }) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) { prev = Math.max(prev, j.rev); })
+      .catch(function () { toast("保存できませんでした。アプリが起動しているか確認してください"); })
+      .then(function () { pInflight--; });
+  }
+  // 文字入力は少し待ってからまとめて送る
+  function pPushLater() {
+    clearTimeout(pPushNow.t);
+    if (!pPending) { pPending = true; pInflight++; }  // 送るまでの間、他からの配信で入力中の内容を上書きしない
+    pPushNow.t = setTimeout(pPushNow, 350);
+  }
+
+  es.addEventListener("promo", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (pInflight > 0 || d.rev <= prev) return;
+    prev = d.rev; promo = d.promo;
+    drawPromo(true);
+  });
+
+  // 状態の変更はすべてここを通す
+  function pCommit(mut, opts) {
+    if (!promo) { toast("読み込み中です"); return; }
+    mut(promo);
+    drawPromo(!(opts && opts.keepEditor));
+    if (opts && opts.later) pPushLater(); else pPushNow();
+  }
+
+  function drawPromo(rebuildEditor) {
+    if (!promo) return;
+    if (!slideById(selId)) selId = promo.slides.length ? promo.slides[0].id : null;
+    saveLocal("sortie-promo-sel", selId);
+    var st = promo.settings;
+    $("pOn").classList.toggle("on", st.on);
+    $("pOn").textContent = "配信に表示: " + (st.on ? "オン" : "オフ");
+    var list = promo.slides.filter(function (s) { return s.on && playable(s); });
+    var total = list.reduce(function (a, s) { return a + s.sec; }, 0);
+    $("pSummary").textContent = list.length ? "流れるスライド " + list.length + " 枚・1周 " + total + " 秒" + (st.gap ? "（そのあと " + st.gap + " 秒隠す）" : "") : "流れるスライドがありません";
+    drawSlideList();
+    if (rebuildEditor) {
+      var ae = document.activeElement;
+      if (!(ae && ae.closest && ae.closest("#pEditor") && /^(INPUT|TEXTAREA)$/.test(ae.tagName))) drawEditor();
+    }
+    drawPromoSettings();
+    showPPreview();
+  }
+
+  var pMovedId = null;
+  function drawSlideList() {
+    var ol = $("slides");
+    if (!promo.slides.length) { ol.innerHTML = '<li class="empty" style="display:block;cursor:default">スライドがありません。上のボタンから追加してください。</li>'; return; }
+    var before = {};
+    Array.prototype.forEach.call(ol.querySelectorAll("li[data-id]"), function (li) { before[li.dataset.id] = li.getBoundingClientRect().top; });
+    ol.innerHTML = promo.slides.map(function (s, i) {
+      var sum = s.tpl === "sns" ? (s.title || SERVICE_NAME[s.service] || "SNS") + (s.sub ? " ／ " + s.sub : "")
+        : s.tpl === "image" ? (s.title || "（画像）")
+        : (s.title || s.body.split("\n")[0] || "（空）");
+      var warn = !playable(s) ? '<span class="warn-t">' + (s.tpl === "image" ? "画像が未設定" : "中身が空") + "</span>" : "";
+      return '<li data-id="' + s.id + '" class="' + (s.id === selId ? "sel" : "") + (s.on ? "" : " off") + '">' +
+        '<button class="sw' + (s.on ? " on" : "") + '" data-pact="on" title="流す/流さない" aria-label="流す"></button>' +
+        '<span class="tpl-badge ' + s.tpl + '">' + TPL_NAME[s.tpl] + "</span>" +
+        '<span class="sum">' + esc(sum) + warn + "</span>" +
+        '<span class="secs">' + s.sec + "秒</span>" +
+        '<span class="ops"><button data-pact="show" title="今すぐ配信に表示"' + (s.on && playable(s) && promo.settings.on ? "" : " disabled") + ">▶</button>" +
+        '<button data-pact="up" title="上へ"' + (i === 0 ? " disabled" : "") + ">▲</button>" +
+        '<button data-pact="down" title="下へ"' + (i === promo.slides.length - 1 ? " disabled" : "") + ">▼</button>" +
+        '<button data-pact="dup" title="複製">⧉</button>' +
+        '<button data-pact="del" class="warn" title="削除">✕</button></span></li>';
+    }).join("");
+    Array.prototype.forEach.call(ol.querySelectorAll("li[data-id]"), function (li) {
+      var id = li.dataset.id;
+      if (before[id] == null) return;
+      var dy = before[id] - li.getBoundingClientRect().top;
+      if (Math.abs(dy) > 0.5 && li.animate) li.animate([{ transform: "translateY(" + dy + "px)" }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
+      if (id === pMovedId) li.classList.add("moved");
+    });
+    pMovedId = null;
+  }
+
+  $("slides").addEventListener("click", function (ev) {
+    var li = ev.target.closest("li[data-id]"); if (!li) return;
+    var id = li.dataset.id, b = ev.target.closest("button[data-pact]");
+    if (!b) { if (selId !== id) { selId = id; drawPromo(true); } return; }
+    var act = b.dataset.pact;
+    if (act === "show") {
+      fetch("/api/promo/show", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id }) })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); toast("配信に表示しました"); }, function () { throw new Error(); })
+        .catch(function () { toast("表示できませんでした"); });
+      return;
+    }
+    if (act === "del") {
+      var s = slideById(id);
+      if (!confirm("「" + (s.title || TPL_NAME[s.tpl]) + "」のスライドを削除しますか？")) return;
+    }
+    pCommit(function (p) {
+      var i = pIndex(id); if (i < 0) return;
+      var s = p.slides[i];
+      if (act === "on") s.on = !s.on;
+      else if (act === "up" && i > 0) { p.slides.splice(i, 1); p.slides.splice(i - 1, 0, s); pMovedId = id; }
+      else if (act === "down" && i < p.slides.length - 1) { p.slides.splice(i, 1); p.slides.splice(i + 1, 0, s); pMovedId = id; }
+      else if (act === "dup") { var c = JSON.parse(JSON.stringify(s)); c.id = uid(); p.slides.splice(i + 1, 0, c); selId = c.id; }
+      else if (act === "del") p.slides.splice(i, 1);
+    });
+  });
+
+  document.querySelectorAll("[data-padd]").forEach(function (b) {
+    b.onclick = function () {
+      if (promo && promo.slides.length >= 30) { toast("スライドは30枚までです"); return; }
+      var tpl = b.dataset.padd;
+      var s = Object.assign({ id: uid(), on: true, tpl: tpl, sec: 10, title: "", body: "", sub: "", service: "discord", style: "plain", color: "dark", image: "", size: 100, frame: false }, PRESET[tpl]);
+      selId = s.id;
+      pCommit(function (p) { p.slides.push(s); });
+      var t = $("pEditor").querySelector("input[type=text], textarea");
+      if (tpl === "image") toast("画像を選んでください");
+      else if (t) { t.focus(); t.select(); }
+    };
+  });
+
+  // ---- 編集欄 ----
+  function seg(field, opts, cur) {
+    return '<div class="seg2">' + opts.map(function (o) { return '<button data-ef="' + field + '" data-v="' + o[0] + '" class="' + (o[0] === cur ? "on" : "") + '">' + o[1] + "</button>"; }).join("") + "</div>";
+  }
+  function chips(cur) {
+    return '<div class="chips">' + COLORS.map(function (c) { return '<button data-ef="color" data-v="' + c[0] + '" title="' + c[2] + '" style="background:' + c[1] + '" class="' + (c[0] === cur ? "on" : "") + '"></button>'; }).join("") + "</div>";
+  }
+  function text(field, val, ph, max) { return '<input type="text" data-et="' + field + '" maxlength="' + max + '" placeholder="' + esc(ph || "") + '" value="' + esc(val) + '">'; }
+  function area(field, val, ph) { return '<textarea data-et="' + field + '" rows="2" maxlength="300" placeholder="' + esc(ph || "") + '">' + esc(val) + "</textarea>"; }
+  function stepper(field, val, unit) { return '<span class="stepper"><button data-es="' + field + ':-1">−</button><output>' + val + unit + '</output><button data-es="' + field + ':1">＋</button></span>'; }
+  function drop(s, optional) {
+    return '<div class="drop" id="pDrop" tabindex="0">' + (s.image ? '<img src="/promo-img/' + s.image + '" alt="">' : "") +
+      '<span class="muted">' + (s.image ? "クリックまたはドロップで差し替え" : "クリックで画像を選ぶ／ここへドラッグ＆ドロップ／Ctrl+V で貼り付け" + (optional ? "（なくても可）" : "")) +
+      "<br>PNG・JPEG・GIF・WebP、10MB まで</span>" +
+      (s.image ? '<button data-ef="image" data-v="">外す</button>' : "") + "</div>" +
+      '<input type="file" id="pFile" accept="image/png,image/jpeg,image/gif,image/webp" hidden>';
+  }
+
+  function drawEditor() {
+    var box = $("pEditor"), s = slideById(selId);
+    if (!s) { box.innerHTML = '<h2>編集</h2><div class="empty">スライドを追加・選択すると、ここで内容を編集できます。</div>'; return; }
+    var rows = [];
+    function row(label, html) { rows.push('<span class="lab2">' + label + "</span><div>" + html + "</div>"); }
+    if (s.tpl === "text") {
+      row("見出し", text("title", s.title, "例: 分隊参加はお気軽に!!", 60));
+      row("本文", area("body", s.body, "例: リクエストもお待ちしてます!!（改行可）"));
+      row("見た目", seg("style", [["plain", "縁取り文字"], ["plate", "プレート"]], s.style));
+      row(s.style === "plate" ? "プレートの色" : "見出しの色", chips(s.color));
+    } else if (s.tpl === "sns") {
+      row("サービス", seg("service", SERVICES, s.service));
+      row("表示名", text("title", s.title, SERVICE_NAME[s.service] || "例: 公式サーバー", 60));
+      row("下の帯の文字", text("sub", s.sub, "例: 招待リンクは概要欄へ", 60));
+      row("上に出す文字", area("body", s.body, "なくても可（例: 分隊参加はお気軽に!!）"));
+      row("アイコン画像", drop(s, true));
+      if (s.service === "other") row("色", chips(s.color));
+    } else if (s.tpl === "image") {
+      row("画像", drop(s, false));
+      row("大きさ", stepper("size", s.size, "%"));
+      row("白フチ", '<button class="toggle' + (s.frame ? " on" : "") + '" data-ef="frame" data-v="' + (!s.frame) + '">' + (s.frame ? "オン" : "オフ") + "</button>");
+      row("下に出す文字", text("title", s.title, "なくても可", 60));
+    } else {
+      row("画像", drop(s, true));
+      row("画像の大きさ", stepper("size", s.size, "%"));
+      row("見出し", text("title", s.title, "", 60));
+      row("本文", area("body", s.body, "改行可"));
+      row("プレートの色", chips(s.color));
+    }
+    row("表示する秒数", stepper("sec", s.sec, " 秒"));
+    box.innerHTML = '<h2>編集（' + TPL_NAME[s.tpl] + "）</h2>" + '<div class="ed-grid">' + rows.join("") + "</div>";
+    var dz = $("pDrop");
+    if (dz) {
+      dz.onclick = function (ev) { if (!ev.target.closest("button")) $("pFile").click(); };
+      dz.onkeydown = function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); $("pFile").click(); } };
+      dz.ondragover = function (ev) { ev.preventDefault(); dz.classList.add("over"); };
+      dz.ondragleave = function () { dz.classList.remove("over"); };
+      dz.ondrop = function (ev) { ev.preventDefault(); dz.classList.remove("over"); var f = ev.dataTransfer.files[0]; if (f) uploadImage(f); };
+      $("pFile").onchange = function () { var f = this.files[0]; if (f) uploadImage(f); this.value = ""; };
+    }
+  }
+
+  function setField(field, v, opts) {
+    var id = selId;
+    pCommit(function (p) { var s = slideById(id); if (s) s[field] = v; }, opts);
+  }
+  $("pEditor").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button"); if (!b) return;
+    if (b.dataset.ef) {
+      var v = b.dataset.v;
+      setField(b.dataset.ef, b.dataset.ef === "frame" ? v === "true" : v);
+    } else if (b.dataset.es) {
+      var p = b.dataset.es.split(":"), s = slideById(selId); if (!s) return;
+      var f = p[0], d = +p[1];
+      if (f === "sec") setField("sec", clamp(s.sec + d * (s.sec >= 30 ? 5 : 1), 3, 300));
+      else setField("size", clamp(s.size + d * 10, 20, 300));
+    }
+  });
+  $("pEditor").addEventListener("input", function (ev) {
+    var f = ev.target.dataset.et; if (!f) return;
+    setField(f, ev.target.value, { later: true, keepEditor: true });
+  });
+
+  function uploadImage(file) {
+    if (!slideById(selId)) { toast("先にスライドを追加・選択してください"); return; }
+    if (IMG_TYPES.indexOf(file.type) < 0) { toast("PNG・JPEG・GIF・WebP の画像を選んでください"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast("画像が大きすぎます（10MB まで）"); return; }
+    var id = selId;
+    toast("画像を読み込み中…");
+    fetch("/api/promo/image", { method: "POST", headers: { "Content-Type": file.type }, body: file })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) { pCommit(function () { var s = slideById(id); if (s) s.image = j.name; }); toast("画像を設定しました"); })
+      .catch(function () { toast("画像を保存できませんでした"); });
+  }
+  // 告知スライドのタブを開いているときは、クリップボードの画像を Ctrl+V で貼り付けられる
+  document.addEventListener("paste", function (ev) {
+    if (activeTab !== "promo" || !ev.clipboardData) return;
+    var items = ev.clipboardData.files;
+    for (var i = 0; i < items.length; i++) {
+      if (/^image\//.test(items[i].type)) { ev.preventDefault(); uploadImage(items[i]); return; }
+    }
+  });
+
+  // ---- 表示設定 ----
+  var ALIGN_LABEL = { top: "上", middle: "中", bottom: "下", left: "左", center: "中", right: "右" };
+  (function () {
+    var h = "";
+    ["top", "middle", "bottom"].forEach(function (v) { ["left", "center", "right"].forEach(function (hh) { h += '<button data-pal="' + hh + ":" + v + '" title="' + ALIGN_LABEL[v] + ALIGN_LABEL[hh] + '">' + "</button>"; }); });
+    $("pAlign").innerHTML = h;
+  })();
+  function drawPromoSettings() {
+    var st = promo.settings;
+    document.querySelectorAll("#pTrans button").forEach(function (b) { b.classList.toggle("on", b.dataset.v === st.transition); });
+    $("pGap").textContent = st.gap ? st.gap + " 秒" : "なし";
+    $("pGapHelp").textContent = st.gap ? "1周流したら " + st.gap + " 秒間なにも表示しません" : "隠さずに続けて流します";
+    $("pBar").classList.toggle("on", st.showBar);
+    $("pBar").textContent = st.showBar ? "オン" : "オフ";
+    $("pScale").textContent = st.scale + "%";
+    document.querySelectorAll("#pAlign button").forEach(function (b) { b.classList.toggle("on", b.dataset.pal === st.hAlign + ":" + st.vAlign); b.textContent = b.classList.contains("on") ? "●" : ""; });
+    document.querySelectorAll("#pvMode button").forEach(function (b) { b.classList.toggle("on", b.dataset.pv === pvMode); });
+  }
+  $("pOn").onclick = function () { pCommit(function (p) { p.settings.on = !p.settings.on; }); };
+  $("pBar").onclick = function () { pCommit(function (p) { p.settings.showBar = !p.settings.showBar; }); };
+  document.querySelectorAll("#pTrans button").forEach(function (b) { b.onclick = function () { pCommit(function (p) { p.settings.transition = b.dataset.v; }); }; });
+  var GAP_STEPS = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240, 300, 420, 600, 900, 1200, 1800, 3600];
+  document.querySelectorAll("[data-pgap]").forEach(function (b) {
+    b.onclick = function () {
+      pCommit(function (p) {
+        var cur = p.settings.gap, d = +b.dataset.pgap, i = 0;
+        while (i < GAP_STEPS.length - 1 && GAP_STEPS[i] < cur) i++;
+        if (d > 0) i = GAP_STEPS[i] > cur ? i : i + 1; else i = i - 1;
+        p.settings.gap = GAP_STEPS[clamp(i, 0, GAP_STEPS.length - 1)];
+      });
+    };
+  });
+  document.querySelectorAll("[data-pscale]").forEach(function (b) { b.onclick = function () { pCommit(function (p) { p.settings.scale = clamp(p.settings.scale + +b.dataset.pscale, 30, 300); }); }; });
+  $("pAlign").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-pal]"); if (!b) return;
+    var a = b.dataset.pal.split(":");
+    pCommit(function (p) { p.settings.hAlign = a[0]; p.settings.vAlign = a[1]; });
+  });
+  document.querySelectorAll("#pvMode button").forEach(function (b) { b.onclick = function () { pvMode = b.dataset.pv; saveLocal("sortie-promo-pv", pvMode); drawPromoSettings(); showPPreview(); }; });
+
+  var promoUrl = location.origin + "/promo";
+  $("pUrl").textContent = promoUrl;
+  $("copyPUrl").onclick = function () { copy(promoUrl, "URL"); };
+
+  function showPPreview() {
+    if (!promo) return;
+    try { $("ppreview").contentWindow.postMessage({ type: "promo-state", promo: promo, focus: pvMode === "one" ? selId : null }, location.origin); } catch (e) {}
+  }
+  function fitPPreview() {
+    var w = $("ppvWrap").clientWidth; if (!w) return;
+    var s = Math.min(1, w / 1000);
+    $("ppreview").style.transform = "scale(" + s + ")";
+    $("ppvWrap").style.height = Math.round(450 * s) + "px";
+  }
+  window.addEventListener("resize", fitPPreview);
+  $("ppreview").addEventListener("load", function () { fitPPreview(); showPPreview(); });
 
   // 最前面表示（アプリのウィンドウで開いているときだけ使える）
   if (window.sortieApp) {

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>SortieTicket promo</title>
+<link rel="stylesheet" href="/fonts/oswald/700.css">
+<link rel="stylesheet" href="/fonts/noto/900.css">
+<style>
+  /* 分隊ランク表示（overlay.html）と同じ部品感：斜めのプレート・白フチ・Oswald / Noto Sans JP 900・黄色のアクセント */
+  :root {
+    --gauge: #ffd23c;
+    --skew: -20deg;
+    --border: 3px solid rgba(255,255,255,.95);
+    --shadow: 0 3px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.45);
+    --scale: 1;
+    --font-num: "Oswald", "Bahnschrift", "Arial Narrow", Impact, sans-serif;
+    --font-jp: "Oswald", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+    --img-w: 640px;   /* 画像の最大サイズ（大きさ 100% のとき） */
+    --img-h: 360px;
+    --c-dark: #1b2330; --c-air: #1687f2; --c-ground: #ff6a00; --c-green: #1fa055; --c-yellow: #ffd23c; --c-red: #e5484d; --c-purple: #8a4dff;
+    --s-discord: #5865f2; --s-x: #111418; --s-youtube: #ff0033; --s-twitch: #9146ff; --s-tiktok: #111418;
+  }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; }
+  body.preview {
+    background-color: #2b2f36;
+    background-image: linear-gradient(45deg, #353a42 25%, transparent 25%), linear-gradient(-45deg, #353a42 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #353a42 75%), linear-gradient(-45deg, transparent 75%, #353a42 75%);
+    background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  }
+  #stage { position: absolute; inset: 0; padding: 24px 44px; box-sizing: border-box; display: flex; }
+  #stage.h-left { justify-content: flex-start; } #stage.h-center { justify-content: center; } #stage.h-right { justify-content: flex-end; }
+  #stage.v-top { align-items: flex-start; } #stage.v-middle { align-items: center; } #stage.v-bottom { align-items: flex-end; }
+  #deck { display: grid; transform: scale(var(--scale)); }
+  #stage.v-top.h-left #deck { transform-origin: 0 0; } #stage.v-top.h-center #deck { transform-origin: 50% 0; } #stage.v-top.h-right #deck { transform-origin: 100% 0; }
+  #stage.v-middle.h-left #deck { transform-origin: 0 50%; } #stage.v-middle.h-center #deck { transform-origin: 50% 50%; } #stage.v-middle.h-right #deck { transform-origin: 100% 50%; }
+  #stage.v-bottom.h-left #deck { transform-origin: 0 100%; } #stage.v-bottom.h-center #deck { transform-origin: 50% 100%; } #stage.v-bottom.h-right #deck { transform-origin: 100% 100%; }
+
+  /* スライドは同じマスに重ねて置き、表示中のものだけ見せる（切り替え時は重なってクロスフェード） */
+  .slide {
+    grid-area: 1 / 1; display: flex; flex-direction: column; gap: 10px; width: max-content;
+    opacity: 0; visibility: hidden;
+    transition: opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1), visibility 0s linear .5s;
+  }
+  .h-left .slide { justify-self: start; align-items: flex-start; }
+  .h-center .slide { justify-self: center; align-items: center; }
+  .h-right .slide { justify-self: end; align-items: flex-end; }
+  .v-top .slide { align-self: start; } .v-middle .slide { align-self: center; } .v-bottom .slide { align-self: end; }
+  .slide.show { opacity: 1; visibility: visible; transition-delay: 0s; }
+  .tr-slide .slide { transform: translateX(-70px); }
+  .tr-slide .slide.show { transform: none; }
+  .tr-slide .slide.leave { transform: translateY(-60%); transition-timing-function: ease, cubic-bezier(.5,0,.75,0), linear; }
+  .tr-none .slide, .slide.instant { transition: none !important; }
+
+  .plate { box-sizing: border-box; transform: skewX(var(--skew)); border: var(--border); box-shadow: var(--shadow); position: relative; }
+  .unskew { transform: skewX(calc(var(--skew) * -1)); }
+  .jp { font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; line-height: 1.2; white-space: pre; }
+  .c-dark { --c: var(--c-dark); } .c-air { --c: var(--c-air); } .c-ground { --c: var(--c-ground); } .c-green { --c: var(--c-green); }
+  .c-yellow { --c: var(--c-yellow); } .c-red { --c: var(--c-red); } .c-purple { --c: var(--c-purple); }
+
+  /* 縁取り文字（今の配信で使っている白い告知文字と同じ雰囲気） */
+  .outline { color: #fff; -webkit-text-stroke: 7px rgba(10,12,16,.92); paint-order: stroke fill; text-shadow: 0 3px 6px rgba(0,0,0,.45); }
+
+  /* ---- テキスト告知 ---- */
+  .t-text .title { font-size: 46px; }
+  .t-text .body { font-size: 34px; }
+  .t-text.st-plain:not(.c-dark) .title { color: var(--c); }
+  .t-text .plate { background: var(--c); padding: 14px 40px 16px; display: flex; flex-direction: column; gap: 4px; }
+  .t-text .plate .jp { color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35), 0 0 6px rgba(0,0,0,.25); }
+  .t-text .plate .title { font-size: 44px; }
+  .t-text .plate .body { font-size: 30px; }
+  .t-text.c-dark .plate .title { color: var(--gauge); }
+  .t-text.c-yellow .plate .jp { color: #111; text-shadow: none; }
+
+  /* ---- SNS / Discord 誘導 ---- */
+  .t-sns .lead { font-size: 38px; }
+  .t-sns .plate { background: var(--sc); min-width: 330px; padding: 10px 28px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .t-sns.s-x .plate, .t-sns.s-tiktok .plate { background: var(--s-x); }
+  .s-discord { --sc: var(--s-discord); } .s-x { --sc: var(--s-x); } .s-youtube { --sc: var(--s-youtube); } .s-twitch { --sc: var(--s-twitch); } .s-tiktok { --sc: var(--s-tiktok); }
+  .s-other { --sc: var(--c); }
+  .t-sns .head { display: flex; align-items: center; gap: 14px; }
+  .t-sns .head img { height: 52px; width: auto; max-width: 120px; object-fit: contain; }
+  .t-sns .name { color: #fff; font-family: var(--font-jp); font-weight: 700; font-size: 52px; line-height: 1.1; white-space: nowrap; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .t-sns .pill { background: #fff; padding: 5px 26px 7px; box-shadow: 0 2px 0 rgba(0,0,0,.25); align-self: stretch; text-align: center; }
+  .t-sns .pill .jp { display: inline-block; color: var(--sc); font-size: 26px; }
+  .t-sns.s-x .pill .jp, .t-sns.s-tiktok .pill .jp { color: #111; }
+
+  /* ---- 画像 ---- */
+  .t-image img { display: block; max-width: calc(var(--img-w) * var(--size)); max-height: calc(var(--img-h) * var(--size)); filter: drop-shadow(0 4px 10px rgba(0,0,0,.5)); }
+  .t-image.frame img { border: 4px solid rgba(255,255,255,.95); filter: none; box-shadow: var(--shadow); }
+  .t-image .caption { font-size: 34px; color: var(--gauge); }
+
+  /* ---- 画像＋テキスト ---- */
+  .t-imagetext .plate { background: var(--c); padding: 12px 36px 12px 22px; display: flex; align-items: center; gap: 22px; }
+  .t-imagetext .pic { width: calc(120px * var(--size)); height: calc(120px * var(--size)); display: flex; align-items: center; justify-content: center; flex: none; }
+  .t-imagetext .pic img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .t-imagetext .txt { display: flex; flex-direction: column; gap: 4px; }
+  .t-imagetext .jp { color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .t-imagetext .title { font-size: 40px; }
+  .t-imagetext .body { font-size: 28px; }
+  .t-imagetext.c-dark .title { color: var(--gauge); }
+  .t-imagetext.c-yellow .jp { color: #111; text-shadow: none; }
+
+  /* 残り時間のバー（分隊ランクの試合数ゲージと同じ黄色・傾き） */
+  .bar { align-self: stretch; height: 10px; margin: 2px 6px 0 14px; transform: skewX(var(--skew)); background: rgba(0,0,0,.35); box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
+  .bar i { display: block; height: 100%; background: var(--gauge); transform-origin: left; }
+  .slide.show .bar i.run { animation: drain var(--sec) linear forwards; }
+  @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  .nobar .bar { display: none; }
+
+  .hint { font: 700 22px/1.4 "Noto Sans JP", sans-serif; color: rgba(255,255,255,.6); grid-area: 1 / 1; align-self: center; justify-self: center; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="stage" class="h-left v-bottom tr-fade"><div id="deck"></div></div>
+<script>
+(function () {
+  "use strict";
+  var q = new URLSearchParams(location.search);
+  var preview = q.has("preview");
+  if (preview) document.body.classList.add("preview");
+  var stage = document.getElementById("stage"), deck = document.getElementById("deck");
+
+  var promo = null;
+  var focusId = null;     // プレビューで固定表示するスライド
+  var curId = null;       // 今表示しているスライド
+  var resting = false;    // 1周後の休み時間中
+  var timer = null;
+  var shownAt = 0;        // 今のスライドを出した時刻（作り直したときにバーを続きから流すため）
+
+  function h(tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text != null) el.textContent = text;
+    return el;
+  }
+  function img(name) { var i = h("img"); i.src = "/promo-img/" + name; i.alt = ""; return i; }
+  var SERVICE_NAME = { discord: "Discord", x: "X", youtube: "YouTube", twitch: "Twitch", tiktok: "TikTok", other: "" };
+
+  // 表示できる内容があるか（画像のテンプレートで画像が未設定なら飛ばす）
+  function playable(s) {
+    if (s.tpl === "image") return !!s.image;
+    if (s.tpl === "imagetext") return !!(s.image || s.title || s.body);
+    if (s.tpl === "sns") return true;
+    return !!(s.title || s.body);
+  }
+
+  function buildSlide(s) {
+    var el = h("div", "slide t-" + s.tpl + " c-" + s.color);
+    el.dataset.id = s.id;
+    el.style.setProperty("--sec", s.sec + "s");
+    el.style.setProperty("--size", s.size / 100);
+    if (s.tpl === "text") {
+      el.classList.add("st-" + s.style);
+      if (s.style === "plate") {
+        var p = el.appendChild(h("div", "plate"));
+        if (s.title) p.appendChild(h("div", "jp unskew title", s.title));
+        if (s.body) p.appendChild(h("div", "jp unskew body", s.body));
+      } else {
+        if (s.title) el.appendChild(h("div", "jp outline title", s.title));
+        if (s.body) el.appendChild(h("div", "jp outline body", s.body));
+      }
+    } else if (s.tpl === "sns") {
+      el.classList.add("s-" + s.service);
+      if (s.body) el.appendChild(h("div", "jp outline lead", s.body));
+      var sp = el.appendChild(h("div", "plate"));
+      var head = sp.appendChild(h("div", "head unskew"));
+      if (s.image) head.appendChild(img(s.image));
+      var name = s.title || SERVICE_NAME[s.service];
+      if (name) head.appendChild(h("span", "name", name));
+      if (s.sub) sp.appendChild(h("div", "pill")).appendChild(h("span", "jp unskew", s.sub));
+    } else if (s.tpl === "image") {
+      if (s.frame) el.classList.add("frame");
+      if (s.image) el.appendChild(img(s.image));
+      if (s.title) el.appendChild(h("div", "jp outline caption", s.title));
+    } else if (s.tpl === "imagetext") {
+      var ip = el.appendChild(h("div", "plate"));
+      if (s.image) ip.appendChild(h("div", "pic unskew")).appendChild(img(s.image));
+      var tx = ip.appendChild(h("div", "txt unskew"));
+      if (s.title) tx.appendChild(h("div", "jp title", s.title));
+      if (s.body) tx.appendChild(h("div", "jp body", s.body));
+    }
+    el.appendChild(h("div", "bar")).appendChild(h("i"));
+    return el;
+  }
+
+  function slideEl(id) { return id ? deck.querySelector('.slide[data-id="' + CSS.escape(id) + '"]') : null; }
+
+  // 順番に流すスライド（オフのもの・中身がないものは除く）
+  function playlist() {
+    if (!promo) return [];
+    if (focusId) return promo.slides.filter(function (s) { return s.id === focusId; });
+    return promo.slides.filter(function (s) { return s.on && playable(s); });
+  }
+
+  function restartBar(el, run, elapsedMs) {
+    var i = el && el.querySelector(".bar i");
+    if (!i) return;
+    i.classList.remove("run"); void i.offsetWidth;
+    i.style.animationDelay = elapsedMs ? -(elapsedMs / 1000) + "s" : "";
+    if (run) i.classList.add("run");
+  }
+
+  function hide(el) {
+    if (!el || !el.classList.contains("show")) return;
+    el.classList.remove("show");
+    if (stage.classList.contains("tr-slide")) {
+      el.classList.add("leave");
+      setTimeout(function () { el.classList.add("instant"); el.classList.remove("leave"); void el.offsetWidth; el.classList.remove("instant"); }, 520);
+    }
+  }
+
+  function show(id) {
+    clearTimeout(timer);
+    resting = false;
+    var list = playlist();
+    Array.prototype.forEach.call(deck.querySelectorAll(".slide.show"), function (el) { if (el.dataset.id !== id) hide(el); });
+    curId = id; shownAt = Date.now();
+    var el = slideEl(id), s = list.filter(function (x) { return x.id === id; })[0];
+    if (!el || !s) { curId = null; return; }
+    el.classList.add("show");
+    restartBar(el, !focusId);
+    if (!focusId) timer = setTimeout(next, s.sec * 1000);
+  }
+
+  function next() {
+    var list = playlist();
+    if (!list.length) { stopAll(); return; }
+    var i = -1;
+    for (var k = 0; k < list.length; k++) if (list[k].id === curId) i = k;
+    var gap = promo.settings.gap;
+    if (i === list.length - 1 && gap > 0 && !resting) {
+      // 1周したら休み時間（何も出さない）
+      hide(slideEl(curId)); curId = null; resting = true;
+      timer = setTimeout(function () { resting = false; var l = playlist(); if (l.length) show(l[0].id); }, gap * 1000);
+      return;
+    }
+    show(list[(i + 1) % list.length].id);
+  }
+
+  function stopAll() {
+    clearTimeout(timer); timer = null; curId = null; resting = false;
+    Array.prototype.forEach.call(deck.querySelectorAll(".slide.show"), hide);
+  }
+
+  function applySettings(st) {
+    stage.className = "h-" + st.hAlign + " v-" + st.vAlign + " tr-" + st.transition + (st.showBar ? "" : " nobar");
+    document.documentElement.style.setProperty("--scale", st.scale / 100);
+  }
+
+  function render(p, opt) {
+    if (!p || !Array.isArray(p.slides) || !p.settings) return;
+    promo = p;
+    focusId = opt && opt.focus ? opt.focus : null;
+    applySettings(p.settings);
+    // 中身は毎回作り直す。表示中のスライドは切り替えの演出なしでそのまま見せ続ける
+    var wasShown = curId;
+    deck.textContent = "";
+    p.slides.forEach(function (s) { deck.appendChild(buildSlide(s)); });
+    var list = playlist();
+    var on = p.settings.on || preview;
+    if (!on || !list.length) {
+      stopAll();
+      if (preview) deck.appendChild(h("div", "hint", !p.slides.length ? "スライドがありません" : !p.settings.on ? "（配信には非表示中）" : "表示できるスライドがありません"));
+      return;
+    }
+    if (focusId) { curId = null; var el0 = slideEl(focusId); el0.classList.add("instant", "show"); restartBar(el0, false); void el0.offsetWidth; el0.classList.remove("instant"); clearTimeout(timer); return; }
+    if (resting) return;
+    var still = list.some(function (s) { return s.id === wasShown; });
+    if (still) {
+      // 表示時間のタイマーはそのまま（入力のたびに最初からにならないように）。バーも続きから流す
+      var el = slideEl(wasShown);
+      el.classList.add("instant", "show"); void el.offsetWidth; el.classList.remove("instant");
+      restartBar(el, true, Date.now() - shownAt);
+      return;
+    }
+    if (wasShown || !timer) show(list[0].id);
+  }
+
+  // 操作画面のプレビュー（iframe）は postMessage で即時反映
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (ev.origin !== location.origin || !d) return;
+    if (d.type === "promo-state") render(d.promo, { focus: d.focus });
+  });
+
+  // 本番: アプリからの配信（Server-Sent Events。切れても自動で再接続）
+  if (!preview || q.has("live")) {
+    var es = new EventSource("/events");
+    es.addEventListener("promo", function (ev) {
+      try { render(JSON.parse(ev.data).promo); } catch (e) {}
+    });
+    es.addEventListener("promo-show", function (ev) {
+      var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+      if (!promo || focusId) return;
+      if (playlist().some(function (s) { return s.id === d.id; })) show(d.id);
+    });
+  }
+})();
+</script>
+</body>
+</html>

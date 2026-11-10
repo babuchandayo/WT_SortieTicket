@@ -64,6 +64,7 @@
   .seg-toggle button.on.ground { background: var(--ground); }
   .stepper { display: inline-flex; align-items: center; gap: 4px; }
   .stepper button { width: 30px; padding: 4px 0; }
+  .add-memo { flex: 1 1 160px; min-width: 120px; width: auto; }
   .stepper output { min-width: 22px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
 
   /* キュー */
@@ -113,6 +114,7 @@
       <input id="brIn" class="br-in" placeholder="BR" aria-label="BR" inputmode="decimal">
       <span class="cell"><span class="lab">残参加枠</span><span class="stepper"><button data-st="slots:-1">−</button><output id="nSlots"></output><button data-st="slots:1">＋</button></span></span>
       <span class="cell"><span class="lab">試合数</span><span class="stepper"><button data-st="games:-1">−</button><output id="nGames"></output><button data-st="games:1">＋</button></span></span>
+      <input id="memoIn" class="memo add-memo" maxlength="60" placeholder="メモ（任意）" aria-label="メモ">
       <button id="addOne">＋ 追加</button>
     </div>
   </section>
@@ -219,8 +221,8 @@
     drawAll(); push(); toast("元に戻しました");
   }
   function find(id) { for (var i = 0; i < state.queue.length; i++) if (state.queue[i].id === id) return i; return -1; }
-  function newEntry(kind, br, slots, games) {
-    return { id: uid(), kind: kind, br: br, slots: clamp(slots, 0, MAX_SLOTS), games: clamp(games, 1, MAX_GAMES), played: 0, live: false };
+  function newEntry(kind, br, slots, games, memo) {
+    return { id: uid(), kind: kind, br: br, slots: clamp(slots, 0, MAX_SLOTS), games: clamp(games, 1, MAX_GAMES), played: 0, live: false, memo: memo || "" };
   }
 
   // Space: 試合開始 → 終了（1試合消化）。最後の試合が終わったら区分を完了
@@ -374,11 +376,13 @@
   function addFromForm() {
     var br = fmtBR($("brIn").value);
     if (!br) { toast("BRを入れてください"); $("brIn").focus(); return; }
-    commit(function (s) { s.queue.push(newEntry(draft.kind, br, draft.slots, draft.games)); });
-    $("brIn").value = "";
+    var memo = $("memoIn").value.replace(/[\u0000-\u001f]/g, "").trim().slice(0, 60);
+    commit(function (s) { s.queue.push(newEntry(draft.kind, br, draft.slots, draft.games, memo)); });
+    $("brIn").value = ""; $("memoIn").value = "";
   }
   $("addOne").onclick = addFromForm;
   $("brIn").addEventListener("keydown", function (ev) { if (ev.key === "Enter") addFromForm(); });
+  $("memoIn").addEventListener("keydown", function (ev) { if (ev.key === "Enter") addFromForm(); });
 
 
   $("undo").onclick = undo;

@@ -236,7 +236,7 @@
   </section>
 
   <section class="muted">
-    ショートカット（入力欄の外で）: <kbd>Space</kbd> 試合開始 → 試合終了 ／ <kbd>Esc</kbd> 開始を取り消し ／ <kbd>↑</kbd><kbd>↓</kbd> 先頭の残参加枠 ± ／ <kbd>Ctrl</kbd>+<kbd>Z</kbd> 元に戻す
+    ショートカット（入力欄の外で）: <kbd>Space</kbd> 試合終了（1試合消化） ／ <kbd>Tab</kbd> メモ欄を順に移動 ／ <kbd>↑</kbd><kbd>↓</kbd> 先頭の残参加枠 ± ／ <kbd>Ctrl</kbd>+<kbd>Z</kbd> 元に戻す
   </section>
   </div>
 
@@ -430,25 +430,21 @@
     return { id: uid(), kind: kind, br: br, slots: clamp(slots, 0, MAX_SLOTS), games: clamp(games, 1, MAX_GAMES), played: 0, live: false, memo: memo || "" };
   }
 
-  // Space: 試合開始 → 終了（1試合消化）。最後の試合が終わったら区分を完了
+  // Space: 試合終了（1試合消化）。最後の試合が終わったら区分を完了。
+  // 先頭の区分の「今の試合」は常に進行中として扱う（試合開始の操作はなし）
   function advance() {
     if (!state.queue.length) { toast("キューが空です"); return; }
     commit(function (s) {
       var e = s.queue[0];
-      if (!e.live) { e.live = true; return; }
       e.live = false; e.played++;
       if (e.played >= e.games) s.queue.shift();
     });
   }
-  function cancelLive() {
-    if (!state.queue.length || !state.queue[0].live) return;
-    commit(function (s) { s.queue[0].live = false; });
-  }
 
   // ---- 描画 ----
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  function pips(e) {
-    var h = ""; for (var i = 0; i < e.games; i++) h += '<i class="' + (i < e.played ? "used" : "") + (i === e.played && e.live ? " live" : "") + '"></i>';
+  function pips(e, isFirst) {
+    var h = ""; for (var i = 0; i < e.games; i++) h += '<i class="' + (i < e.played ? "used" : "") + (i === e.played && isFirst ? " live" : "") + '"></i>';
     return '<span class="pips">' + h + "</span>";
   }
   function kindName(k) { return k === "air" ? "空" : "陸"; }
@@ -463,14 +459,12 @@
       var left = e.games - e.played;
       nc.innerHTML = '<h2>進行（先頭の区分）</h2>' +
         '<div class="now-title"><span class="chip ' + e.kind + '"><span>' + kindName(e.kind) + " " + esc(e.br) + "</span></span>" +
-        '<span>残参加枠 ' + e.slots + '</span><span class="grow"></span>' + pips(e) + '<span class="muted">残り' + left + "試合</span></div>" +
+        '<span>残参加枠 ' + e.slots + '</span><span class="grow"></span>' + pips(e, true) + '<span class="muted">残り' + left + "試合</span></div>" +
         '<div class="row">' +
-        '<button class="big grow ' + (e.live ? "live" : "primary") + '" id="advBtn">' +
-        (e.live ? "試合終了（1試合消化）" + (left === 1 ? " → 区分完了" : "") : "試合開始") + ' <kbd>Space</kbd></button>' +
-        (e.live ? '<button id="cancelLive">開始を取り消す</button>' : "") +
+        '<button class="big grow live" id="advBtn">' +
+        "試合終了（1試合消化）" + (left === 1 ? " → 区分完了" : "") + ' <kbd>Space</kbd></button>' +
         '<button id="doneBtn" class="warn">区分を完了</button></div>';
       $("advBtn").onclick = advance;
-      if ($("cancelLive")) $("cancelLive").onclick = cancelLive;
       $("doneBtn").onclick = function () { commit(function (s) { s.queue.shift(); }); };
     }
 
@@ -490,7 +484,7 @@
         '<div class="cells">' +
         '<span class="cell"><span class="lab">残参加枠</span><span class="stepper"><button data-act="slots:-1">−</button><output>' + e.slots + '</output><button data-act="slots:1">＋</button></span></span>' +
         '<span class="cell"><span class="lab">試合</span><span class="stepper"><button data-act="games:-1">−</button><output>' + (e.games - e.played) + "/" + e.games + '</output><button data-act="games:1">＋</button></span></span>' +
-        pips(e) + "</div>" +
+        pips(e, i === 0) + "</div>" +
         '<input class="memo" data-act="memo" maxlength="60" placeholder="メモ" value="' + esc(e.memo || "") + '" aria-label="メモ">' +
         '<div class="ops"><button data-act="up" title="上へ"' + (i === 0 ? " disabled" : "") + '>▲</button>' +
         '<button data-act="down" title="下へ"' + (i === state.queue.length - 1 ? " disabled" : "") + '>▼</button>' +
@@ -604,6 +598,17 @@
   $("ovUrl").textContent = overlayUrl;
   $("copyUrl").onclick = function () { copy(overlayUrl, "URL"); };
 
+  // Tab: 手入力するメモ欄（追加欄 → キューの上から順）だけを行き来する。Shift+Tab で逆順
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Tab" || ev.ctrlKey || ev.metaKey || ev.altKey || activeTab !== "rank") return;
+    var list = [$("memoIn")].concat(Array.prototype.slice.call($("queue").querySelectorAll('input[data-act="memo"]')));
+    var i = list.indexOf(document.activeElement);
+    ev.preventDefault();
+    var n = i < 0 ? (ev.shiftKey ? list.length - 1 : 0) : (i + (ev.shiftKey ? -1 : 1) + list.length) % list.length;
+    list[n].focus();
+    if (list[n].select) list[n].select();
+  }, true);
+
   document.addEventListener("keydown", function (ev) {
     var tag = (ev.target.tagName || "").toLowerCase();
     var typing = tag === "input" || tag === "textarea";
@@ -611,7 +616,6 @@
     if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && ev.key.toLowerCase() === "z") { ev.preventDefault(); undo(); return; }
     if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
     if (ev.key === " ") { ev.preventDefault(); advance(); }
-    else if (ev.key === "Escape") cancelLive();
     else if ((ev.key === "ArrowUp" || ev.key === "ArrowDown") && state.queue.length) {
       ev.preventDefault();
       var d = ev.key === "ArrowUp" ? 1 : -1;

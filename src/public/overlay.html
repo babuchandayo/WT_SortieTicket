@@ -195,6 +195,7 @@
       if (isNew) el = els[e.id] = build(e);
       update(el, e, i === 0);
       row.appendChild(el); // 順番を揃える（既存要素は移動）
+      placeNow(el, e);     // DOM に入ってから測り直す（新規要素は追加前だと幅 0 で位置がずれる）
       if (isNew) el.animate([{ opacity: 0, transform: "translateX(60px)" }, { opacity: 1, transform: "none" }], { duration: MOVE_MS, easing: EASE });
     });
     Object.keys(first).forEach(function (id) {
@@ -241,8 +242,14 @@
   var langParam = q.get("lang");
   if (langParam === "en" || langParam === "jp") setLang(langParam);  // 確認用: 片方の言語で固定
   else setTimeout(cycleLang, SHOW_MS);
+  var lastState = null;
+  function placeAll() {
+    placeLegendNow();
+    if (lastState) lastState.queue.forEach(function (e) { if (els[e.id]) placeNow(els[e.id], e); });
+  }
   placeLegendNow();
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeLegendNow);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeAll);
+  window.addEventListener("resize", placeAll);
 
   function applySettings(st) {
     legend.classList.toggle("hidden", !(st && st.showLegend));
@@ -251,6 +258,7 @@
 
   function render(state) {
     if (!state || !state.queue) return;
+    lastState = state;
     if (busy) { pending = state; return; }
     applySettings(state.settings);
     var ids = {}; state.queue.forEach(function (e) { ids[e.id] = 1; });

@@ -137,10 +137,13 @@
     var seq = [cur];   // 下から順（最初に見えるのが今のスライド）
     for (var k = 0; k < n; k++) seq.push(randomOther(pool, seq[seq.length - 1], k === n - 1 ? target : null));
     seq.push(target);
+    // 止まる直前に少し行き過ぎて戻るので、結果の上にももう 1 枚置いておく（ないと上に隙間が見える）
+    seq.push(randomOther(pool, target, null));
     strip.textContent = "";
     for (var i = seq.length - 1; i >= 0; i--) strip.appendChild(card(seq[i]));
     var H = machine.querySelector(".window").clientHeight;
-    var D = (seq.length - 1) * H;
+    var D = (seq.length - 1) * H;   // 一番下（今のスライド）が窓に来る位置
+    var E = -H;                      // 結果（上から 2 枚目）が窓に来る位置
     machine.classList.remove("win");
     machine.classList.add("spinning");
     machine.classList.remove("hidden");
@@ -148,9 +151,9 @@
     var bounce = Math.min(H * 0.1, 40);
     anim = strip.animate([
       { offset: 0, transform: "translateY(" + -D + "px)", filter: "blur(0px)", easing: "cubic-bezier(.5,0,1,1)" },
-      { offset: 0.1, transform: "translateY(" + (-D + D * 0.05) + "px)", filter: "blur(2.5px)", easing: "cubic-bezier(.12,.5,.25,1)" },
-      { offset: 0.92, transform: "translateY(" + bounce + "px)", filter: "blur(0px)", easing: "cubic-bezier(.3,0,.3,1)" },
-      { offset: 1, transform: "translateY(0px)", filter: "blur(0px)" },
+      { offset: 0.1, transform: "translateY(" + (-D + (D + E) * 0.05) + "px)", filter: "blur(2.5px)", easing: "cubic-bezier(.12,.5,.25,1)" },
+      { offset: 0.92, transform: "translateY(" + (E + bounce) + "px)", filter: "blur(0px)", easing: "cubic-bezier(.3,0,.3,1)" },
+      { offset: 1, transform: "translateY(" + E + "px)", filter: "blur(0px)" },
     ], { duration: dur, fill: "forwards" });
     anim.onfinish = function () { anim = null; showStill(sp.id); finish(true); };
   }

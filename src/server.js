@@ -15,6 +15,10 @@
 //   POST /api/promo/image         … 画像のアップロード（本文は画像そのもの）
 //   POST /api/promo/show          … 指定したスライドを今すぐ表示
 //   GET  /promo-img/<name>        … アップロードした画像
+//   GET  /slot                    … スロット告知のオーバーレイ
+//   GET  /api/slot                … スロット告知の現在の状態
+//   PUT  /api/slot                … スロット告知の更新（操作画面から）
+//   POST /api/slot/spin           … リールを回す（結果はサーバーが抽選して配信する）
 const http = require("http");
 const fs = require("fs");
 const os = require("os");
@@ -23,6 +27,7 @@ const crypto = require("crypto");
 const { sanitizeState, defaultState } = require("./state");
 const { sanitizeCounter, sanitizeCounterSettings, defaultCounter, applyAction } = require("./counter");
 const { sanitizePromo, defaultPromo, imageExt, usedImages, IMAGE_RE, LIMITS: PROMO_LIMITS } = require("./promo");
+const { sanitizeSlot, defaultSlot, pickNext, usedSlotImages } = require("./slot");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -69,10 +74,17 @@ function createServer(opts) {
   if (promoFile) {
     try { promo = sanitizePromo(JSON.parse(fs.readFileSync(promoFile, "utf8"))); } catch (e) { /* 初回起動など */ }
   }
-  // どのスライドからも使われなくなった画像は起動時に片付ける
+  const slotFile = opts.dataDir ? path.join(opts.dataDir, "slot.json") : null;
+  let srev = 0;
+  let slot = defaultSlot();
+  if (slotFile) {
+    try { slot = sanitizeSlot(JSON.parse(fs.readFileSync(slotFile, "utf8"))); } catch (e) { /* 初回起動など */ }
+  }
+  // どのスライドからも使われなくなった画像は起動時に片付ける（告知スライドとスロット告知で同じフォルダを使う）
   // （起動中は消さない。削除したスライドを作り直したときなどに残っていた方が安全なため）
   try {
     const used = usedImages(promo);
+    for (const f of usedSlotImages(slot)) used.add(f);
     for (const f of fs.readdirSync(imageDir)) if (IMAGE_RE.test(f) && !used.has(f)) fs.unlinkSync(path.join(imageDir, f));
   } catch (e) { /* フォルダがまだない */ }
 
@@ -94,11 +106,13 @@ function createServer(opts) {
   function persist() { saveLater(stateFile, () => state); }
   function persistCounter() { saveLater(counterFile, () => counter); }
   function persistPromo() { saveLater(promoFile, () => promo); }
+  function persistSlot() { saveLater(slotFile, () => slot); }
 
   const clients = new Set();
   function payload() { return JSON.stringify({ rev, state }); }
   function counterPayload() { return JSON.stringify({ rev: crev, counter }); }
   function promoPayload() { return JSON.stringify({ rev: prev, promo }); }
+  function slotPayload() { return JSON.stringify({ rev: srev, slot, spin: lastSpin, now: Date.now() }); }
   function sendAll(event, data) {
     const msg = "event: " + event + "\ndata: " + data + "\n\n";
     for (const res of clients) res.write(msg);
@@ -122,6 +136,48 @@ function createServer(opts) {
     setCounter(next);
     return true;
   }
+
+  // ---- スロット告知 ----
+  // 抽選はサーバーで行い、結果をすべてのオーバーレイ（OBS・プレビュー）に同じものとして配る
+  let lastSpin = null;   // { seq, id, at, spinMs }（直近に回したとき。保存はしない）
+  let spinSeq = 0;
+  let autoTimer = null;
+  const slotListeners = new Set();
+  function setSlot(next) {
+    const hotkeyChanged = next.settings.hotkey !== slot.settings.hotkey;
+    const autoChanged = next.settings.autoEvery !== slot.settings.autoEvery || next.settings.on !== slot.settings.on;
+    slot = next; srev++;
+    persistSlot();
+    sendAll("slot", slotPayload());
+    if (autoChanged) scheduleAuto();
+    for (const fn of slotListeners) { try { fn(slot, { hotkeyChanged }); } catch (e) { /* 通知先の不具合で止めない */ } }
+  }
+  function spinning() { return !!(lastSpin && Date.now() < lastSpin.at + lastSpin.spinMs); }
+  // 回す。回っている最中・配信オフ・対象なしのときは null
+  function spinSlot(rnd) {
+    if (!slot.settings.on || spinning()) return null;
+    const s = pickNext(slot.slides, slot.last, rnd);
+    if (!s) return null;
+    lastSpin = { seq: ++spinSeq, id: s.id, at: Date.now(), spinMs: slot.settings.spinSec * 1000 };
+    slot = Object.assign({}, slot, { last: s.id }); srev++;
+    persistSlot();
+    sendAll("slot-spin", JSON.stringify(lastSpin));
+    sendAll("slot", slotPayload());
+    scheduleAuto();
+    return lastSpin;
+  }
+  function scheduleAuto() {
+    clearTimeout(autoTimer); autoTimer = null;
+    const every = slot.settings.autoEvery;
+    if (!every || !slot.settings.on) return;
+    // 直前に回した時刻から数える（設定を変えるたびに最初から数え直さない）
+    const since = lastSpin ? Date.now() - lastSpin.at : 0;
+    autoTimer = setTimeout(function tick() {
+      if (spinning()) { autoTimer = setTimeout(tick, 500); return; }
+      if (!spinSlot()) scheduleAuto();
+    }, Math.max(1000, every * 1000 - since));
+  }
+  scheduleAuto();
 
   function readJson(req, res, cb) {
     if (!originOk(req)) return send(res, 403, "forbidden");
@@ -165,6 +221,7 @@ function createServer(opts) {
       res.write("event: state\ndata: " + payload() + "\n\n");
       res.write("event: counter\ndata: " + counterPayload() + "\n\n");
       res.write("event: promo\ndata: " + promoPayload() + "\n\n");
+      res.write("event: slot\ndata: " + slotPayload() + "\n\n");
       clients.add(res);
       req.on("close", () => clients.delete(res));
       return;
@@ -226,6 +283,30 @@ function createServer(opts) {
         send(res, 200, "{}", "application/json");
       });
     }
+    if (p === "/api/slot") {
+      if (req.method === "GET") return send(res, 200, slotPayload(), "application/json");
+      if (req.method === "PUT") {
+        return readJson(req, res, (j) => {
+          let next;
+          try { next = sanitizeSlot(j.slot); } catch (e) { return send(res, 400, "bad request"); }
+          // 直前の結果はサーバーが持っている方を使う（操作画面の古い値で上書きしない）
+          next.last = next.slides.some((s) => s.id === slot.last) ? slot.last : null;
+          setSlot(next);
+          send(res, 200, JSON.stringify({ rev: srev }), "application/json");
+        });
+      }
+      return send(res, 405, "method not allowed");
+    }
+    if (p === "/api/slot/spin") {
+      if (req.method !== "POST") return send(res, 405, "method not allowed");
+      return readJson(req, res, () => {
+        if (!slot.settings.on) return send(res, 409, "off");
+        if (spinning()) return send(res, 409, "spinning");
+        const r = spinSlot();
+        if (!r) return send(res, 409, "no slides");
+        send(res, 200, JSON.stringify(r), "application/json");
+      });
+    }
     if (p === "/api/promo/image") {
       if (req.method !== "POST") return send(res, 405, "method not allowed");
       if (!originOk(req)) return send(res, 403, "forbidden");
@@ -260,6 +341,7 @@ function createServer(opts) {
       });
     }
     if (p === "/promo") return serveFile(res, path.join(publicDir, "promo.html"));
+    if (p === "/slot") return serveFile(res, path.join(publicDir, "slot.html"));
     if (p === "/" || p === "/overlay") return serveFile(res, path.join(publicDir, "overlay.html"));
     if (p === "/control") return serveFile(res, path.join(publicDir, "control.html"));
     if (p === "/counter") return serveFile(res, path.join(publicDir, "counter.html"));
@@ -275,6 +357,9 @@ function createServer(opts) {
     getState: () => ({ rev, state }),
     getCounter: () => ({ rev: crev, counter }),
     getPromo: () => ({ rev: prev, promo }),
+    getSlot: () => ({ rev: srev, slot, spin: lastSpin }),
+    spinSlot,
+    onSlotChange(fn) { slotListeners.add(fn); return () => slotListeners.delete(fn); },
     counterAction,
     onCounterChange(fn) { counterListeners.add(fn); return () => counterListeners.delete(fn); },
     listen() {
@@ -285,6 +370,7 @@ function createServer(opts) {
     },
     close() {
       clearInterval(ping);
+      clearTimeout(autoTimer);
       for (const res of clients) res.end();
       clients.clear();
       flushSaves();

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>SortieTicket slot</title>
+<link rel="stylesheet" href="/fonts/oswald/700.css">
+<link rel="stylesheet" href="/fonts/noto/900.css">
+<style>
+  /* スロット告知: 16:9 のスライドを 1 本のリールに並べ、上から下へ回して 1 枚に止める */
+  :root {
+    --gauge: #ffd23c;
+    --w: 640px;
+    --shadow: 0 3px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.45);
+    --c-dark: #1b2330; --c-air: #1687f2; --c-ground: #ff6a00; --c-green: #1fa055; --c-yellow: #ffd23c; --c-red: #e5484d; --c-purple: #8a4dff;
+  }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; width: 100%; height: 100%; }
+  body.preview {
+    background-color: #2b2f36;
+    background-image: linear-gradient(45deg, #353a42 25%, transparent 25%), linear-gradient(-45deg, #353a42 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #353a42 75%), linear-gradient(-45deg, transparent 75%, #353a42 75%);
+    background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  }
+  #stage { position: absolute; inset: 0; padding: 24px 44px; box-sizing: border-box; display: flex; }
+  #stage.h-left { justify-content: flex-start; } #stage.h-center { justify-content: center; } #stage.h-right { justify-content: flex-end; }
+  #stage.v-top { align-items: flex-start; } #stage.v-middle { align-items: center; } #stage.v-bottom { align-items: flex-end; }
+
+  #machine { position: relative; width: var(--w); transition: opacity .4s ease, transform .4s cubic-bezier(.2,.8,.2,1); }
+  #machine.hidden { opacity: 0; transform: translateY(-14px); }
+  body.preview #machine.hidden { opacity: .3; transform: none; }
+
+  .window { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: #0d1015; }
+  .frame .window { outline: 4px solid rgba(255,255,255,.95); box-shadow: var(--shadow); }
+  /* 回っている間は上下を暗くして、リールが丸く回っているように見せる */
+  .window::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s;
+    background: linear-gradient(to bottom, rgba(0,0,0,.75), rgba(0,0,0,0) 22%, rgba(0,0,0,0) 78%, rgba(0,0,0,.75)); }
+  .spinning .window::after { opacity: 1; }
+  .strip { position: absolute; left: 0; top: 0; width: 100%; will-change: transform; }
+  .card { width: 100%; aspect-ratio: 16 / 9; position: relative; overflow: hidden; background: var(--c); display: flex; align-items: center; justify-content: center; }
+  .card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .card .label { font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-weight: 900; color: #fff; text-align: center; padding: 0 6%;
+    font-size: calc(var(--w) * .085); line-height: 1.2; -webkit-text-stroke: calc(var(--w) * .011) rgba(10,12,16,.92); paint-order: stroke fill; text-shadow: 0 3px 6px rgba(0,0,0,.45); }
+  .c-dark { --c: var(--c-dark); } .c-air { --c: var(--c-air); } .c-ground { --c: var(--c-ground); } .c-green { --c: var(--c-green); }
+  .c-yellow { --c: var(--c-yellow); } .c-red { --c: var(--c-red); } .c-purple { --c: var(--c-purple); }
+
+  /* 左右の目印（止まる位置）。分隊ランク表示と同じ黄色 */
+  .mark { display: none; position: absolute; top: 50%; width: 0; height: 0; border: calc(var(--w) * .028) solid transparent; margin-top: calc(var(--w) * -.028); filter: drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
+  .frame .mark { display: block; }
+  .mark.l { left: calc(var(--w) * -.06); border-left-color: var(--gauge); }
+  .mark.r { right: calc(var(--w) * -.06); border-right-color: var(--gauge); }
+  /* 止まった瞬間に枠を光らせる */
+  .win .window { animation: win 1.1s ease-out; }
+  .frame.win .window { animation: winf 1.1s ease-out; }
+  @keyframes win { 0%, 30% { filter: brightness(1.35); } 100% { filter: none; } }
+  @keyframes winf { 0% { outline-color: var(--gauge); box-shadow: 0 0 0 4px var(--gauge), 0 0 40px rgba(255,210,60,.9); } 100% { outline-color: rgba(255,255,255,.95); box-shadow: var(--shadow); } }
+
+  .hint { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font: 700 26px/1.4 "Noto Sans JP", sans-serif; color: rgba(255,255,255,.7); text-shadow: 0 2px 4px rgba(0,0,0,.6); }
+</style>
+</head>
+<body>
+<div id="stage" class="h-center v-middle">
+  <div id="machine" class="hidden">
+    <i class="mark l"></i><i class="mark r"></i>
+    <div class="window"><div class="strip" id="strip"></div></div>
+  </div>
+</div>
+<div class="hint" id="hint" hidden></div>
+<script>
+(function () {
+  "use strict";
+  var q = new URLSearchParams(location.search);
+  var preview = q.has("preview");
+  if (preview) document.body.classList.add("preview");
+  var stage = document.getElementById("stage"), machine = document.getElementById("machine"), strip = document.getElementById("strip"), hint = document.getElementById("hint");
+
+  var slot = null;        // { slides, settings, last }
+  var spin = null;        // 直近に回したとき { seq, id, at, spinMs }（サーバーの時刻）
+  var skew = 0;           // サーバーの時刻 − この画面の時刻
+  var shownId = null;     // 今窓に出ているスライド
+  var anim = null;        // 回転中のアニメーション
+  var doneSeq = 0;        // 再生済みの回転
+  var hideTimer = null;
+
+  function h(tag, cls, text) { var el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; }
+  function playable(s) { return s.on && !!(s.image || s.title); }
+  function list() { return slot ? slot.slides.filter(playable) : []; }
+  function byId(id) { if (!slot) return null; for (var i = 0; i < slot.slides.length; i++) if (slot.slides[i].id === id) return slot.slides[i]; return null; }
+  function now() { return Date.now() + skew; }
+
+  function card(s) {
+    var el = h("div", "card c-" + (s ? s.color : "dark"));
+    if (!s) return el;
+    if (s.image) { var i = h("img"); i.src = "/promo-img/" + s.image; i.alt = ""; el.appendChild(i); }
+    else if (s.title) el.appendChild(h("div", "label", s.title));
+    return el;
+  }
+
+  // 止まっている状態の表示（1 枚だけ）
+  function showStill(id) {
+    var s = byId(id);
+    if (!s || !playable(s)) { var l = list(); s = l.length ? l[0] : null; }
+    shownId = s ? s.id : null;
+    strip.textContent = ""; strip.style.transform = "";
+    strip.appendChild(card(s));
+  }
+
+  // 結果を出しておく時間が過ぎたら隠す
+  function updateVisible() {
+    clearTimeout(hideTimer);
+    if (!slot) return;
+    var st = slot.settings, has = list().length > 0;
+    var vis = has && (st.on || preview);
+    if (vis && st.hold > 0) {
+      var end = spin ? spin.at + spin.spinMs + st.hold * 1000 : 0;
+      var left = end - now();
+      if (anim) left = Math.max(left, 1);
+      vis = left > 0;
+      if (vis) hideTimer = setTimeout(updateVisible, left + 30);
+    }
+    machine.classList.toggle("hidden", !vis);
+    if (preview) {
+      var msg = !slot.slides.length ? "スライドがありません" : !has ? "抽選できるスライドがありません" : !st.on ? "（配信には非表示中）" : !vis ? "（止まったあとの表示時間が過ぎたので、配信では隠れています）" : "";
+      hint.hidden = !msg; hint.textContent = msg;
+    }
+  }
+
+  // 回すアニメーション。strip を [結果, つなぎ…, 今のスライド] の順に縦に並べ、下へ動かして結果で止める
+  function play(sp) {
+    var target = byId(sp.id);
+    if (!target) return;
+    doneSeq = sp.seq;
+    if (anim) { anim.cancel(); anim = null; }
+    var dur = sp.spinMs - (now() - sp.at);
+    if (dur < 600) { showStill(sp.id); finish(false); return; }
+    var pool = list(); if (!pool.length) pool = [target];
+    var cur = byId(shownId) || pool[0];
+    var n = Math.max(10, Math.round(dur / 1000 * 7));
+    var seq = [cur];   // 下から順（最初に見えるのが今のスライド）
+    for (var k = 0; k < n; k++) seq.push(randomOther(pool, seq[seq.length - 1], k === n - 1 ? target : null));
+    seq.push(target);
+    strip.textContent = "";
+    for (var i = seq.length - 1; i >= 0; i--) strip.appendChild(card(seq[i]));
+    var H = machine.querySelector(".window").clientHeight;
+    var D = (seq.length - 1) * H;
+    machine.classList.remove("win");
+    machine.classList.add("spinning");
+    machine.classList.remove("hidden");
+    updateVisible();
+    var bounce = Math.min(H * 0.1, 40);
+    anim = strip.animate([
+      { offset: 0, transform: "translateY(" + -D + "px)", filter: "blur(0px)", easing: "cubic-bezier(.5,0,1,1)" },
+      { offset: 0.1, transform: "translateY(" + (-D + D * 0.05) + "px)", filter: "blur(2.5px)", easing: "cubic-bezier(.12,.5,.25,1)" },
+      { offset: 0.92, transform: "translateY(" + bounce + "px)", filter: "blur(0px)", easing: "cubic-bezier(.3,0,.3,1)" },
+      { offset: 1, transform: "translateY(0px)", filter: "blur(0px)" },
+    ], { duration: dur, fill: "forwards" });
+    anim.onfinish = function () { anim = null; showStill(sp.id); finish(true); };
+  }
+  // 直前と違うスライドをランダムに（最後の 1 枚は結果とも違うものに）
+  function randomOther(pool, prevS, nextS) {
+    var c = pool.filter(function (s) { return s !== prevS && s !== nextS; });
+    if (!c.length) c = pool.filter(function (s) { return s !== prevS; });
+    if (!c.length) c = pool;
+    return c[Math.floor(Math.random() * c.length)];
+  }
+  function finish(flash) {
+    machine.classList.remove("spinning");
+    if (flash) { void machine.offsetWidth; machine.classList.add("win"); }
+    updateVisible();
+  }
+
+  function applySettings(st) {
+    stage.className = "h-" + st.hAlign + " v-" + st.vAlign;
+    machine.classList.toggle("frame", st.frame);
+    document.documentElement.style.setProperty("--w", st.width + "px");
+  }
+
+  function render(next) {
+    if (!next || !Array.isArray(next.slides) || !next.settings) return;
+    slot = next;
+    applySettings(slot.settings);
+    if (anim) { updateVisible(); return; }   // 回っている最中は止まるまで作り直さない
+    showStill(shownId && byId(shownId) ? shownId : slot.last);
+    updateVisible();
+  }
+
+  function onSpin(sp) {
+    if (!sp || sp.seq === doneSeq || !slot) return;
+    spin = sp;
+    play(sp);
+  }
+
+  // 操作画面のプレビュー（iframe）は postMessage で即時反映
+  window.addEventListener("message", function (ev) {
+    var d = ev.data;
+    if (ev.origin !== location.origin || !d) return;
+    if (d.type === "slot-state") {
+      var keep = slot ? slot.last : null;
+      render(Object.assign({}, d.slot, { last: keep || d.slot.last }));
+    }
+  });
+
+  // アプリからの配信（Server-Sent Events。切れても自動で再接続）
+  var es = new EventSource("/events");
+  es.addEventListener("slot", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (typeof d.now === "number") skew = d.now - Date.now();
+    var first = !slot;
+    if (preview && slot) {
+      // プレビューは内容を操作画面から受け取る。サーバーからは直前の結果だけ使う
+      slot = Object.assign({}, slot, { last: d.slot.last });
+    } else render(d.slot);
+    if (first && preview) render(d.slot);
+    if (d.spin && d.spin.seq !== doneSeq) {
+      // 開いた時点で回っている途中なら残りを回し、終わっていれば結果をそのまま出す
+      spin = d.spin;
+      if (first) { doneSeq = d.spin.seq; if (now() < d.spin.at + d.spin.spinMs - 600) { doneSeq = 0; play(d.spin); } else { showStill(d.spin.id); updateVisible(); } }
+    }
+  });
+  es.addEventListener("slot-spin", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    onSpin(d);
+  });
+})();
+</script>
+</body>
+</html>

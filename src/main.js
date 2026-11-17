@@ -83,27 +83,30 @@ if (!app.requestSingleInstanceLock()) {
       writeConfig(configFile, Object.assign(readConfig(configFile), { alwaysOnTop: win.isAlwaysOnTop() }));
       return win.isAlwaysOnTop();
     });
-    // 勝敗カウンターのグローバルホットキー（このウィンドウが前面になくても受け付ける）
+    // 勝敗カウンターとスロット告知のグローバルホットキー（このウィンドウが前面になくても受け付ける）
     let hotkeyStatus = {};
-    function registerHotkeys(keys) {
+    function registerHotkeys() {
       globalShortcut.unregisterAll();
       hotkeyStatus = {};
-      for (const name of Object.keys(keys)) {
-        const acc = keys[name];
+      const keys = srv.getCounter().counter.settings.hotkeys;
+      const jobs = Object.keys(keys).map((name) => [name, keys[name], () => srv.counterAction(name, "hotkey")]);
+      jobs.push(["slotSpin", srv.getSlot().slot.settings.hotkey, () => srv.spinSlot()]);
+      for (const [name, acc, fn] of jobs) {
         if (!acc) { hotkeyStatus[name] = { key: "", ok: true }; continue; }
         let ok = false;
-        try { ok = globalShortcut.register(acc, () => srv.counterAction(name, "hotkey")); } catch (e) { ok = false; }
+        try { ok = globalShortcut.register(acc, fn); } catch (e) { ok = false; }
         hotkeyStatus[name] = { key: acc, ok };
       }
       if (win) win.webContents.send("hotkeys:status", hotkeyStatus);
     }
-    registerHotkeys(srv.getCounter().counter.settings.hotkeys);
-    srv.onCounterChange((c, info) => { if (info.hotkeysChanged) registerHotkeys(c.settings.hotkeys); });
+    registerHotkeys();
+    srv.onCounterChange((c, info) => { if (info.hotkeysChanged) registerHotkeys(); });
+    srv.onSlotChange((s, info) => { if (info.hotkeyChanged) registerHotkeys(); });
     ipcMain.handle("hotkeys:status", (e) => (fromWin(e) ? hotkeyStatus : {}));
     // 割り当て変更のキー入力中は、既存のホットキーが反応しないよう一時的に外す
     ipcMain.handle("hotkeys:pause", (e, on) => {
       if (!fromWin(e)) return;
-      if (on === true) globalShortcut.unregisterAll(); else registerHotkeys(srv.getCounter().counter.settings.hotkeys);
+      if (on === true) globalShortcut.unregisterAll(); else registerHotkeys();
     });
 
     // 外部リンクは既定のブラウザで開く

@@ -163,6 +163,28 @@
   .align-grid { display: inline-grid; grid-template-columns: repeat(3, 30px); gap: 3px; vertical-align: middle; }
   .align-grid button { width: 30px; height: 22px; padding: 0; font-size: 11px; }
   .align-grid button.on { background: #2f6fe0; border-color: #2f6fe0; }
+  /* スロット告知 */
+  .spin-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .spin-btn { font-size: 18px; font-weight: 800; padding: 12px 26px; background: #5a4a10; border-color: var(--gauge); color: var(--gauge); letter-spacing: .05em; }
+  .spin-btn:hover { background: #6a5714; }
+  .spin-btn.busy { animation: blink .6s ease-in-out infinite; }
+  ol#sSlides { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+  ol#sSlides li { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: #181c22; border: 1px solid var(--line); cursor: pointer; }
+  ol#sSlides li.sel { border-color: #4b8cff; box-shadow: 0 0 0 1px #4b8cff inset; background: #1b2230; }
+  ol#sSlides li.off .sum, ol#sSlides li.off .thumb, ol#sSlides li.off .rate { opacity: .45; }
+  ol#sSlides li.moved { animation: moved .9s ease-out; }
+  ol#sSlides li.hit { box-shadow: 0 0 0 2px var(--gauge) inset; }
+  .thumb { width: 64px; aspect-ratio: 16 / 9; border-radius: 3px; flex: none; overflow: hidden; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #fff; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .rate { width: 6.6em; flex: none; font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .rate b { font-size: 14px; color: var(--gauge); }
+  .rate span { color: var(--muted); display: block; font-size: 11px; }
+  .weight { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+  .weight button { width: 24px; padding: 2px 0; }
+  .weight input { width: 44px; text-align: center; padding: 3px 2px; font-weight: 700; }
+  .spreview-wrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); position: relative; height: 220px; }
+  .spreview-wrap iframe { border: 0; width: 1920px; height: 1080px; transform-origin: 0 0; position: absolute; left: 0; top: 0; }
+  @media (max-width: 560px) { .rate { width: 4.9em; } ol#sSlides .ops button[data-sact="dup"] { display: none; } }
   @media (max-width: 480px) { .ed-grid { grid-template-columns: 1fr; } }
   @media (max-width: 420px) { .designs { grid-template-columns: 1fr; } }
   @media (max-width: 560px) {
@@ -182,6 +204,7 @@
     <button role="tab" id="tabBtn-rank" aria-controls="tab-rank" aria-selected="true">分隊ランク</button>
     <button role="tab" id="tabBtn-counter" aria-controls="tab-counter" aria-selected="false">勝敗カウンター</button>
     <button role="tab" id="tabBtn-promo" aria-controls="tab-promo" aria-selected="false">告知スライド</button>
+    <button role="tab" id="tabBtn-slot" aria-controls="tab-slot" aria-selected="false">スロット告知</button>
   </nav>
 
   <div class="tabpanel" id="tab-rank" role="tabpanel">
@@ -358,6 +381,63 @@
         <button id="copyPUrl" class="primary">コピー</button>
       </div>
       <p class="muted" style="margin:8px 0 0">OBS のブラウザソースにこの URL を貼り付けてください（「ローカルファイル」はチェックを外す）。幅 1000 / 高さ 450 から調整してください。背景は透過です。</p>
+    </section>
+  </div>
+
+  <div class="tabpanel" id="tab-slot" role="tabpanel" hidden>
+    <section>
+      <div class="spin-row">
+        <button class="spin-btn" id="sSpin">🎰 回す</button>
+        <span class="muted grow" id="sSpinInfo"></span>
+        <button class="toggle" id="sOn"></button>
+      </div>
+      <p class="muted" style="margin:8px 0 0" id="sSummary"></p>
+    </section>
+
+    <section>
+      <div class="row" style="margin-bottom:4px">
+        <h2 style="margin:0">スライド（16:9）と出る確率</h2><span class="grow"></span>
+        <button id="sAdd">＋ スライドを追加</button>
+      </div>
+      <p class="muted" style="margin:0">「重み」の比で抽選します。同じスライドは連続して出ません（直前に出たものを除いて抽選）。その分、実際の出現率は重みの比と少しずれるので、長く回したときの目安も表示しています。</p>
+      <ol id="sSlides"></ol>
+    </section>
+
+    <section id="sEditor"></section>
+
+    <section>
+      <h2>プレビュー（配信に映る見た目。「回す」もここに映ります）</h2>
+      <div class="spreview-wrap" id="spvWrap"><iframe id="spreview" src="/slot?preview" title="スロット告知のプレビュー"></iframe></div>
+    </section>
+
+    <section>
+      <h2>回し方・表示設定</h2>
+      <div class="ed-grid">
+        <span class="lab2">回っている時間</span>
+        <div class="row"><span class="stepper"><button data-sset="spinSec:-1">−</button><output id="sSpinSec"></output><button data-sset="spinSec:1">＋</button></span></div>
+        <span class="lab2">自動で回す</span>
+        <div class="row"><span class="stepper"><button data-sauto="-1">−</button><output id="sAuto"></output><button data-sauto="1">＋</button></span><span class="muted" id="sAutoHelp"></span></div>
+        <span class="lab2">止まったあと</span>
+        <div class="row"><span class="stepper"><button data-shold="-1">−</button><output id="sHold"></output><button data-shold="1">＋</button></span><span class="muted" id="sHoldHelp"></span></div>
+        <span class="lab2">ホットキー</span>
+        <div class="row"><input class="hk-in" id="sHk" readonly style="max-width:180px"><span class="hk-st" id="sHkSt"></span></div>
+        <span class="lab2">スライドの幅</span>
+        <div class="row"><span class="stepper"><button data-sset="width:-40">−</button><output id="sWidth"></output><button data-sset="width:40">＋</button></span><span class="muted" id="sWidthHelp"></span></div>
+        <span class="lab2">白フチと目印</span>
+        <div><button class="toggle" id="sFrame"></button></div>
+        <span class="lab2">配置</span>
+        <div class="row"><div class="align-grid" id="sAlign"></div><span class="muted">ブラウザソースの枠の中で寄せる位置</span></div>
+      </div>
+      <p class="muted" style="margin:8px 0 0" id="sHkHelp">ホットキーは欄をクリックして新しいキーを押すと変更できます（Esc で中止、Backspace で割り当てなし）。</p>
+    </section>
+
+    <section>
+      <h2>オーバーレイ URL</h2>
+      <div class="row">
+        <span class="url grow" id="sUrl"></span>
+        <button id="copySUrl" class="primary">コピー</button>
+      </div>
+      <p class="muted" style="margin:8px 0 0">OBS のブラウザソースにこの URL を貼り付けてください（「ローカルファイル」はチェックを外す）。幅 1920 / 高さ 1080（画面全体）にして、上の「スライドの幅」と「配置」で位置を合わせるのがおすすめです。背景は透過です。</p>
     </section>
   </div>
 </main>
@@ -625,7 +705,7 @@
 
 
   // ==== タブ ====
-  var TABS = ["rank", "counter", "promo"];
+  var TABS = ["rank", "counter", "promo", "slot"];
   var activeTab = TABS.indexOf(loadLocal("sortie-tab", "rank")) >= 0 ? loadLocal("sortie-tab", "rank") : "rank";
   function showTab(name) {
     activeTab = name;
@@ -634,7 +714,7 @@
       $("tabBtn-" + t).setAttribute("aria-selected", t === name ? "true" : "false");
     });
     saveLocal("sortie-tab", name);
-    if (name === "rank") fitPreview(); else if (name === "counter") fitCPreview(); else fitPPreview();
+    if (name === "rank") fitPreview(); else if (name === "counter") fitCPreview(); else if (name === "promo") fitPPreview(); else fitSPreview();
   }
   TABS.forEach(function (t) { $("tabBtn-" + t).onclick = function () { showTab(t); }; });
 
@@ -769,6 +849,7 @@
       for (var i = 0; i < HK_NAMES.length; i++) {
         if (HK_NAMES[i] !== name && keys[HK_NAMES[i]] === a.accel) { toast(a.accel + " は他の操作に割り当て済みです"); return; }
       }
+      if (slot && slot.settings.hotkey === a.accel) { toast(a.accel + " はスロット告知に割り当て済みです"); return; }
       csettings(function (st) { st.hotkeys[name] = a.accel; });
       inp.blur();
     });
@@ -776,8 +857,8 @@
   $("hkDefault").onclick = function () { csettings(function (st) { st.hotkeys = JSON.parse(JSON.stringify(HK_DEFAULT)); }); };
 
   if (window.sortieApp && window.sortieApp.getHotkeyStatus) {
-    window.sortieApp.getHotkeyStatus().then(function (s) { hkStatus = s; drawHotkeys(); });
-    window.sortieApp.onHotkeyStatus(function (s) { hkStatus = s; drawHotkeys(); });
+    window.sortieApp.getHotkeyStatus().then(function (s) { hkStatus = s; drawHotkeys(); drawSlotHotkey(); });
+    window.sortieApp.onHotkeyStatus(function (s) { hkStatus = s; drawHotkeys(); drawSlotHotkey(); });
     $("hkHelp").textContent = "SortieTicket のウィンドウが前面になくても（ゲーム中でも）反応します。" + $("hkHelp").textContent;
   } else {
     // ブラウザや OBS ドックで開いているときは、このページにフォーカスがある間だけ効く
@@ -1105,6 +1186,348 @@
   }
   window.addEventListener("resize", fitPPreview);
   $("ppreview").addEventListener("load", function () { fitPPreview(); showPPreview(); });
+
+  // ==== スロット告知 ====
+  var slot = null, srev = -1, sInflight = 0, sSpin = null, sSkew = 0, sSelId = loadLocal("sortie-slot-sel", null);
+  function sById(id) { if (!slot) return null; for (var i = 0; i < slot.slides.length; i++) if (slot.slides[i].id === id) return slot.slides[i]; return null; }
+  function sIndex(id) { for (var i = 0; i < slot.slides.length; i++) if (slot.slides[i].id === id) return i; return -1; }
+  function sPlayable(s) { return s.on && !!(s.image || s.title); }
+  function sColor(c) { for (var i = 0; i < COLORS.length; i++) if (COLORS[i][0] === c) return COLORS[i][1]; return COLORS[0][1]; }
+
+  var sPending = false;
+  function sPushNow() {
+    clearTimeout(sPushNow.t);
+    if (sPending) { sPending = false; sInflight--; }
+    sInflight++;
+    return fetch("/api/slot", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slot: slot }) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) { srev = Math.max(srev, j.rev); })
+      .catch(function () { toast("保存できませんでした。アプリが起動しているか確認してください"); })
+      .then(function () { sInflight--; });
+  }
+  function sPushLater() {
+    clearTimeout(sPushNow.t);
+    if (!sPending) { sPending = true; sInflight++; }
+    sPushNow.t = setTimeout(sPushNow, 350);
+  }
+  es.addEventListener("slot", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    if (typeof d.now === "number") sSkew = d.now - Date.now();
+    sSpin = d.spin;
+    // 回した結果（last）は入力中でも受け取る
+    if (sInflight > 0 || d.rev <= srev) { if (slot) { slot.last = d.slot.last; drawSlotList(); drawSpin(); } return; }
+    srev = d.rev; slot = d.slot;
+    drawSlot(true);
+  });
+  es.addEventListener("slot-spin", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    sSpin = d; if (slot) slot.last = d.id;
+    drawSpin();
+    setTimeout(function () { drawSlotList(); drawSpin(); }, Math.max(0, d.spinMs - (Date.now() + sSkew - d.at)) + 50);
+  });
+
+  function sCommit(mut, opts) {
+    if (!slot) { toast("読み込み中です"); return; }
+    mut(slot);
+    drawSlot(!(opts && opts.keepEditor));
+    if (opts && opts.later) sPushLater(); else sPushNow();
+  }
+
+  function sSpinning() { return !!(sSpin && Date.now() + sSkew < sSpin.at + sSpin.spinMs); }
+  function drawSpin() {
+    if (!slot) return;
+    var b = $("sSpin"), busy = sSpinning(), n = slot.slides.filter(sPlayable).length;
+    b.disabled = busy || !slot.settings.on || !n;
+    b.classList.toggle("busy", busy);
+    b.textContent = busy ? "🎰 回転中…" : "🎰 回す";
+    var last = sById(slot.last);
+    $("sSpinInfo").textContent = busy ? "" : last ? "前回: " + (last.title || "（画像）") : "まだ回していません";
+    clearTimeout(drawSpin.t);
+    if (busy) drawSpin.t = setTimeout(drawSpin, sSpin.at + sSpin.spinMs - Date.now() - sSkew + 30);
+  }
+  $("sSpin").onclick = function () {
+    fetch("/api/slot/spin", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); })
+      .catch(function () { toast("回せませんでした（回転中・配信オフ・スライドなしのとき）"); });
+  };
+
+  // 長く回したときの出現率（同じものが連続しない条件つき）。サーバー側 slot.js の longRunRates と同じ計算
+  function sRates() {
+    var list = slot.slides.filter(sPlayable), n = list.length, out = {};
+    if (!n) return out;
+    if (n === 1) { out[list[0].id] = 1; return out; }
+    var w = list.map(function (s) { return s.weight; }), W = w.reduce(function (a, b) { return a + b; }, 0);
+    var p = w.map(function (x) { return x / W; });
+    for (var it = 0; it < 500; it++) {
+      var qv = [], diff = 0, i, j;
+      for (j = 0; j < n; j++) qv[j] = 0;
+      for (i = 0; i < n; i++) for (j = 0; j < n; j++) if (i !== j) qv[j] += p[i] * w[j] / (W - w[i]);
+      for (j = 0; j < n; j++) { var v = (p[j] + qv[j]) / 2; diff += Math.abs(v - p[j]); qv[j] = v; }
+      p = qv;
+      if (diff < 1e-10) break;
+    }
+    list.forEach(function (s, i) { out[s.id] = p[i]; });
+    return out;
+  }
+  function pct(x) { var v = x * 100; return (v >= 10 ? v.toFixed(0) : v.toFixed(1)) + "%"; }
+
+  function drawSlot(rebuildEditor) {
+    if (!slot) return;
+    if (!sById(sSelId)) sSelId = slot.slides.length ? slot.slides[0].id : null;
+    saveLocal("sortie-slot-sel", sSelId);
+    var st = slot.settings;
+    $("sOn").classList.toggle("on", st.on);
+    $("sOn").textContent = "配信に表示: " + (st.on ? "オン" : "オフ");
+    var n = slot.slides.filter(sPlayable).length;
+    $("sSummary").textContent = !n ? "抽選できるスライドがありません（画像か文字を入れて、オンにしてください）"
+      : n === 1 ? "抽選対象は 1 枚だけです。この場合は毎回同じスライドに止まります（連続しないルールは 2 枚以上で効きます）"
+      : n === 2 ? "抽選対象 2 枚。同じものが連続しないため、2 枚だと必ず交互になります"
+      : "抽選対象 " + n + " 枚";
+    drawSlotList();
+    if (rebuildEditor) {
+      var ae = document.activeElement;
+      if (!(ae && ae.closest && ae.closest("#sEditor") && /^(INPUT|TEXTAREA)$/.test(ae.tagName))) drawSlotEditor();
+    }
+    drawSlotSettings();
+    drawSpin();
+    showSPreview();
+  }
+
+  var sMovedId = null;
+  function drawSlotList() {
+    if (!slot) return;
+    var ol = $("sSlides");
+    if (!slot.slides.length) { ol.innerHTML = '<li class="empty" style="display:block;cursor:default">スライドがありません。「＋ スライドを追加」から追加してください。</li>'; return; }
+    var ae = document.activeElement;
+    if (ae && ae.closest && ae.closest("#sSlides") && ae.tagName === "INPUT") return;   // 重みを入力中は作り直さない
+    var rates = sRates(), list = slot.slides.filter(sPlayable);
+    var W = list.reduce(function (a, s) { return a + s.weight; }, 0);
+    var before = {};
+    Array.prototype.forEach.call(ol.querySelectorAll("li[data-id]"), function (li) { before[li.dataset.id] = li.getBoundingClientRect().top; });
+    var spinning = sSpinning();
+    ol.innerHTML = slot.slides.map(function (s, i) {
+      var ok = sPlayable(s);
+      var thumb = '<span class="thumb" style="background:' + sColor(s.color) + '">' + (s.image ? '<img src="/promo-img/' + s.image + '" alt="">' : esc((s.title || "").slice(0, 4))) + "</span>";
+      var sum = esc(s.title || (s.image ? "（画像）" : "（空）")) + (!s.image && !s.title ? '<span class="warn-t">画像か文字を入れてください</span>' : "");
+      var rate = ok ? "<b>" + pct(s.weight / W) + '</b><span title="同じものが連続しない条件で長く回したときの出現率">実際 ' + pct(rates[s.id] || 0) + "</span>" : '<span>対象外</span>';
+      return '<li data-id="' + s.id + '" class="' + (s.id === sSelId ? "sel" : "") + (s.on ? "" : " off") + (!spinning && s.id === slot.last ? " hit" : "") + '">' +
+        '<button class="sw' + (s.on ? " on" : "") + '" data-sact="on" title="抽選に入れる/外す" aria-label="抽選に入れる"></button>' +
+        thumb + '<span class="sum">' + sum + "</span>" +
+        '<span class="weight" title="重み（1〜100）"><button data-sact="w-">−</button><input data-sw="' + s.id + '" inputmode="numeric" value="' + s.weight + '" aria-label="重み"><button data-sact="w+">＋</button></span>' +
+        '<span class="rate">' + rate + "</span>" +
+        '<span class="ops"><button data-sact="up" title="上へ"' + (i === 0 ? " disabled" : "") + ">▲</button>" +
+        '<button data-sact="down" title="下へ"' + (i === slot.slides.length - 1 ? " disabled" : "") + ">▼</button>" +
+        '<button data-sact="dup" title="複製">⧉</button>' +
+        '<button data-sact="del" class="warn" title="削除">✕</button></span></li>';
+    }).join("");
+    Array.prototype.forEach.call(ol.querySelectorAll("li[data-id]"), function (li) {
+      var id = li.dataset.id;
+      if (before[id] == null) return;
+      var dy = before[id] - li.getBoundingClientRect().top;
+      if (Math.abs(dy) > 0.5 && li.animate) li.animate([{ transform: "translateY(" + dy + "px)" }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.2,.8,.2,1)" });
+      if (id === sMovedId) li.classList.add("moved");
+    });
+    sMovedId = null;
+  }
+
+  $("sSlides").addEventListener("click", function (ev) {
+    var li = ev.target.closest("li[data-id]"); if (!li) return;
+    var id = li.dataset.id, b = ev.target.closest("button[data-sact]");
+    if (!b) { if (ev.target.tagName !== "INPUT" && sSelId !== id) { sSelId = id; drawSlot(true); } return; }
+    var act = b.dataset.sact;
+    if (act === "del") {
+      var s0 = sById(id);
+      if (!confirm("「" + (s0.title || "画像のスライド") + "」を削除しますか？")) return;
+    }
+    sCommit(function (p) {
+      var i = sIndex(id); if (i < 0) return;
+      var s = p.slides[i];
+      if (act === "on") s.on = !s.on;
+      else if (act === "w-" || act === "w+") s.weight = act === "w+" ? clamp(s.weight + (s.weight >= 20 ? 5 : 1), 1, 100) : clamp(s.weight - (s.weight > 20 ? 5 : 1), 1, 100);
+      else if (act === "up" && i > 0) { p.slides.splice(i, 1); p.slides.splice(i - 1, 0, s); sMovedId = id; }
+      else if (act === "down" && i < p.slides.length - 1) { p.slides.splice(i, 1); p.slides.splice(i + 1, 0, s); sMovedId = id; }
+      else if (act === "dup") { var c = JSON.parse(JSON.stringify(s)); c.id = uid(); p.slides.splice(i + 1, 0, c); sSelId = c.id; }
+      else if (act === "del") p.slides.splice(i, 1);
+    });
+  });
+  // 重みの直接入力（確定は Enter かフォーカスを外したとき）
+  function sWeightCommit(inp) {
+    var id = inp.dataset.sw, s = sById(id); if (!s) return;
+    var v = clamp(Math.round(Number(inp.value)) || s.weight, 1, 100);
+    inp.blur();
+    if (v !== s.weight) sCommit(function () { var t = sById(id); if (t) t.weight = v; });
+    else drawSlotList();
+  }
+  $("sSlides").addEventListener("keydown", function (ev) { if (ev.target.dataset.sw && ev.key === "Enter") { ev.preventDefault(); sWeightCommit(ev.target); } });
+  $("sSlides").addEventListener("focusout", function (ev) { if (ev.target.dataset.sw) setTimeout(function () { if (document.activeElement !== ev.target) sWeightCommit(ev.target); }, 0); });
+
+  $("sAdd").onclick = function () {
+    if (!slot) { toast("読み込み中です"); return; }
+    if (slot.slides.length >= 30) { toast("スライドは30枚までです"); return; }
+    var s = { id: uid(), on: true, weight: 10, title: "", color: "dark", image: "" };
+    sSelId = s.id;
+    sCommit(function (p) { p.slides.push(s); });
+    toast("画像を選ぶか、文字を入れてください");
+  };
+
+  function drawSlotEditor() {
+    var box = $("sEditor"), s = sById(sSelId);
+    if (!s) { box.innerHTML = '<h2>編集</h2><div class="empty">スライドを追加・選択すると、ここで内容を編集できます。</div>'; return; }
+    var rows = [];
+    function row(label, html) { rows.push('<span class="lab2">' + label + "</span><div>" + html + "</div>"); }
+    row("画像（16:9）", '<div class="drop" id="sDrop" tabindex="0">' + (s.image ? '<img src="/promo-img/' + s.image + '" alt="">' : "") +
+      '<span class="muted">' + (s.image ? "クリックまたはドロップで差し替え" : "クリックで画像を選ぶ／ここへドラッグ＆ドロップ／Ctrl+V で貼り付け") +
+      "<br>PNG・JPEG・GIF・WebP、10MB まで。16:9 でない画像は中央を切り抜いて表示します</span>" +
+      (s.image ? '<button data-sef="image" data-v="">外す</button>' : "") + "</div>" +
+      '<input type="file" id="sFile" accept="image/png,image/jpeg,image/gif,image/webp" hidden>');
+    row("名前", '<input type="text" data-set-t="title" maxlength="40" placeholder="例: Discord 告知" value="' + esc(s.title) + '">' +
+      '<div class="muted" style="margin-top:4px">一覧での名前です。画像がないときは、この文字をスライドに大きく表示します。</div>');
+    row(s.image ? "背景の色" : "背景の色", '<div class="chips">' + COLORS.map(function (c) { return '<button data-sef="color" data-v="' + c[0] + '" title="' + c[2] + '" style="background:' + c[1] + '" class="' + (c[0] === s.color ? "on" : "") + '"></button>'; }).join("") + "</div>" +
+      (s.image ? '<div class="muted" style="margin-top:4px">透過 PNG の透けた部分に出ます。</div>' : ""));
+    box.innerHTML = "<h2>編集</h2>" + '<div class="ed-grid">' + rows.join("") + "</div>";
+    var dz = $("sDrop");
+    dz.onclick = function (ev) { if (!ev.target.closest("button")) $("sFile").click(); };
+    dz.onkeydown = function (ev) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); $("sFile").click(); } };
+    dz.ondragover = function (ev) { ev.preventDefault(); dz.classList.add("over"); };
+    dz.ondragleave = function () { dz.classList.remove("over"); };
+    dz.ondrop = function (ev) { ev.preventDefault(); dz.classList.remove("over"); var f = ev.dataTransfer.files[0]; if (f) sUpload(f); };
+    $("sFile").onchange = function () { var f = this.files[0]; if (f) sUpload(f); this.value = ""; };
+  }
+  function sSetField(field, v, opts) { var id = sSelId; sCommit(function () { var s = sById(id); if (s) s[field] = v; }, opts); }
+  $("sEditor").addEventListener("click", function (ev) { var b = ev.target.closest("button[data-sef]"); if (b) sSetField(b.dataset.sef, b.dataset.v); });
+  $("sEditor").addEventListener("input", function (ev) { var f = ev.target.dataset.setT; if (f) sSetField(f, ev.target.value, { later: true, keepEditor: true }); });
+
+  function sUpload(file) {
+    if (!sById(sSelId)) { toast("先にスライドを追加・選択してください"); return; }
+    if (IMG_TYPES.indexOf(file.type) < 0) { toast("PNG・JPEG・GIF・WebP の画像を選んでください"); return; }
+    if (file.size > 10 * 1024 * 1024) { toast("画像が大きすぎます（10MB まで）"); return; }
+    var id = sSelId;
+    toast("画像を読み込み中…");
+    fetch("/api/promo/image", { method: "POST", headers: { "Content-Type": file.type }, body: file })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (j) { sCommit(function () { var s = sById(id); if (s) s.image = j.name; }); toast("画像を設定しました"); })
+      .catch(function () { toast("画像を保存できませんでした"); });
+  }
+  document.addEventListener("paste", function (ev) {
+    if (activeTab !== "slot" || !ev.clipboardData) return;
+    var items = ev.clipboardData.files;
+    for (var i = 0; i < items.length; i++) if (/^image\//.test(items[i].type)) { ev.preventDefault(); sUpload(items[i]); return; }
+  });
+
+  // ---- 回し方・表示設定 ----
+  (function () {
+    var hh = "";
+    ["top", "middle", "bottom"].forEach(function (v) { ["left", "center", "right"].forEach(function (x) { hh += '<button data-sal="' + x + ":" + v + '" title="' + ALIGN_LABEL[v] + ALIGN_LABEL[x] + '"></button>'; }); });
+    $("sAlign").innerHTML = hh;
+  })();
+  function secLabel(n) { return n >= 60 ? (n % 60 ? Math.floor(n / 60) + " 分 " + (n % 60) + " 秒" : n / 60 + " 分") : n + " 秒"; }
+  function drawSlotSettings() {
+    var st = slot.settings;
+    $("sSpinSec").textContent = st.spinSec + " 秒";
+    $("sAuto").textContent = st.autoEvery ? secLabel(st.autoEvery) : "しない";
+    $("sAutoHelp").textContent = st.autoEvery ? secLabel(st.autoEvery) + "ごとに自動で回します（手動で回すとそこから数え直し）" : "「回す」ボタンかホットキーで回したときだけ回ります";
+    $("sHold").textContent = st.hold ? secLabel(st.hold) : "出したまま";
+    $("sHoldHelp").textContent = st.hold ? "止まってから " + secLabel(st.hold) + " 表示して隠します（次に回すとまた出ます）" : "次に回すまで、止まったスライドを出しておきます";
+    $("sWidth").textContent = st.width + " px";
+    $("sWidthHelp").textContent = "高さ " + Math.round(st.width * 9 / 16) + " px（16:9）";
+    $("sFrame").classList.toggle("on", st.frame);
+    $("sFrame").textContent = st.frame ? "オン" : "オフ";
+    document.querySelectorAll("#sAlign button").forEach(function (b) { var on = b.dataset.sal === st.hAlign + ":" + st.vAlign; b.classList.toggle("on", on); b.textContent = on ? "●" : ""; });
+    drawSlotHotkey();
+  }
+  $("sOn").onclick = function () { sCommit(function (p) { p.settings.on = !p.settings.on; }); };
+  $("sFrame").onclick = function () { sCommit(function (p) { p.settings.frame = !p.settings.frame; }); };
+  document.querySelectorAll("[data-sset]").forEach(function (b) {
+    b.onclick = function () {
+      var a = b.dataset.sset.split(":"), k = a[0], d = +a[1];
+      sCommit(function (p) { p.settings[k] = k === "spinSec" ? clamp(p.settings.spinSec + d, 2, 15) : clamp(p.settings.width + d, 160, 1920); });
+    };
+  });
+  function stepIn(steps, cur, d) {
+    var i = 0;
+    while (i < steps.length - 1 && steps[i] < cur) i++;
+    if (d > 0) i = steps[i] > cur ? i : i + 1; else i = i - 1;
+    return steps[clamp(i, 0, steps.length - 1)];
+  }
+  var AUTO_STEPS = [0, 15, 30, 45, 60, 90, 120, 180, 300, 420, 600, 900, 1200, 1800, 3600];
+  var HOLD_STEPS = [0, 3, 5, 8, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300];
+  document.querySelectorAll("[data-sauto]").forEach(function (b) { b.onclick = function () { sCommit(function (p) { p.settings.autoEvery = stepIn(AUTO_STEPS, p.settings.autoEvery, +b.dataset.sauto); }); }; });
+  document.querySelectorAll("[data-shold]").forEach(function (b) { b.onclick = function () { sCommit(function (p) { p.settings.hold = stepIn(HOLD_STEPS, p.settings.hold, +b.dataset.shold); }); }; });
+  $("sAlign").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-sal]"); if (!b) return;
+    var a = b.dataset.sal.split(":");
+    sCommit(function (p) { p.settings.hAlign = a[0]; p.settings.vAlign = a[1]; });
+  });
+
+  // ---- 回すホットキー（勝敗カウンターと同じ仕組み。アプリのウィンドウではゲーム中も効く） ----
+  var sCapturing = false;
+  function drawSlotHotkey() {
+    if (!slot) return;
+    var key = slot.settings.hotkey, inp = $("sHk"), td = $("sHkSt");
+    if (!sCapturing) inp.value = key || "（なし）";
+    var info = hkStatus && hkStatus.slotSpin;
+    if (!window.sortieApp) { td.className = "hk-st"; td.textContent = ""; return; }
+    if (!key) { td.className = "hk-st"; td.textContent = "割り当てなし"; return; }
+    if (!info || info.key !== key) { td.className = "hk-st"; td.textContent = "登録中…"; return; }
+    td.className = "hk-st " + (info.ok ? "ok" : "ng");
+    td.textContent = info.ok ? "✓ 有効" : "✕ 他のアプリが使用中";
+  }
+  (function () {
+    var inp = $("sHk");
+    function stop() {
+      if (!sCapturing) return;
+      sCapturing = false; inp.classList.remove("capturing");
+      if (window.sortieApp && window.sortieApp.pauseHotkeys) window.sortieApp.pauseHotkeys(false);
+      drawSlotHotkey();
+    }
+    inp.addEventListener("focus", function () {
+      sCapturing = true; inp.classList.add("capturing"); inp.value = "キーを押してください…";
+      if (window.sortieApp && window.sortieApp.pauseHotkeys) window.sortieApp.pauseHotkeys(true);
+    });
+    inp.addEventListener("blur", stop);
+    inp.addEventListener("keydown", function (ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      if (["Control", "Alt", "Shift", "Meta"].indexOf(ev.key) >= 0) return;
+      if (!ev.ctrlKey && !ev.altKey && !ev.shiftKey && !ev.metaKey) {
+        if (ev.key === "Escape") { inp.blur(); return; }
+        if (ev.key === "Backspace" || ev.key === "Delete") { sCommit(function (p) { p.settings.hotkey = ""; }); inp.blur(); return; }
+      }
+      var a = accelOf(ev);
+      if (!a) { toast("このキーは使えません"); return; }
+      if (!a.hasMod && !a.fkey) { toast("Ctrl / Alt / Shift のどれかと組み合わせてください（F1〜F24 は単独でも可）"); return; }
+      var ck = counter ? counter.settings.hotkeys : {};
+      for (var k in ck) if (ck[k] === a.accel) { toast(a.accel + " は勝敗カウンターに割り当て済みです"); return; }
+      sCommit(function (p) { p.settings.hotkey = a.accel; });
+      inp.blur();
+    });
+    if (!window.sortieApp) {
+      $("sHkHelp").textContent = "このページ（ブラウザ／OBS ドック）では、ページを操作している間だけホットキーが効きます。ゲーム中も使うには SortieTicket アプリのウィンドウを起動しておいてください。" + $("sHkHelp").textContent;
+      document.addEventListener("keydown", function (ev) {
+        if (!slot || sCapturing || capturing || !slot.settings.hotkey) return;
+        var a = accelOf(ev);
+        if (a && a.accel === slot.settings.hotkey) { ev.preventDefault(); $("sSpin").click(); }
+      }, true);
+    } else {
+      $("sHkHelp").textContent = "SortieTicket のウィンドウが前面になくても（ゲーム中でも）反応します。" + $("sHkHelp").textContent;
+    }
+  })();
+
+  var slotUrl = location.origin + "/slot";
+  $("sUrl").textContent = slotUrl;
+  $("copySUrl").onclick = function () { copy(slotUrl, "URL"); };
+
+  function showSPreview() {
+    if (!slot) return;
+    try { $("spreview").contentWindow.postMessage({ type: "slot-state", slot: slot }, location.origin); } catch (e) {}
+  }
+  function fitSPreview() {
+    var w = $("spvWrap").clientWidth; if (!w) return;
+    var s = w / 1920;
+    $("spreview").style.transform = "scale(" + s + ")";
+    $("spvWrap").style.height = Math.round(1080 * s) + "px";
+  }
+  window.addEventListener("resize", fitSPreview);
+  $("spreview").addEventListener("load", function () { fitSPreview(); showSPreview(); });
 
   // 最前面表示（アプリのウィンドウで開いているときだけ使える）
   if (window.sortieApp) {

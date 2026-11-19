@@ -4,6 +4,7 @@ const { app, BrowserWindow, Menu, dialog, shell, ipcMain, globalShortcut } = req
 const fs = require("fs");
 const path = require("path");
 const { createServer } = require("./server");
+const { createSubsReader } = require("./subs-reader");
 
 const DEFAULT_PORT = 4630;
 
@@ -21,6 +22,7 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   let win = null;
   let srv = null;
+  let subsReader = null;
 
   app.on("second-instance", () => {
     if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
@@ -33,7 +35,7 @@ if (!app.requestSingleInstanceLock()) {
     const port = Number(config.port) || DEFAULT_PORT;
     if (!fs.existsSync(configFile)) writeConfig(configFile, { port });
 
-    srv = createServer({ port, dataDir });
+    srv = createServer({ port, dataDir, subsReader: true });
     try {
       await srv.listen();
     } catch (e) {
@@ -109,13 +111,21 @@ if (!app.requestSingleInstanceLock()) {
       if (on === true) globalShortcut.unregisterAll(); else registerHotkeys();
     });
 
+    // 登録者カウンター: YouTube Studio のページを裏で開いて数を読む
+    subsReader = createSubsReader(srv, { parent: () => win });
+    subsReader.start();
+    ipcMain.handle("subs:login", (e) => { if (fromWin(e)) subsReader.openLogin(); });
+    ipcMain.handle("subs:reload", (e) => { if (fromWin(e)) subsReader.reload(); });
+    ipcMain.handle("subs:logout", (e) => (fromWin(e) ? subsReader.logout() : null));
+
     // 外部リンクは既定のブラウザで開く
     win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
     win.loadURL(srv.url + "control?app=1");
-    win.on("closed", () => { win = null; });
+    // 裏で開いている Studio のウィンドウが残っていても、操作画面を閉じたら終了する
+    win.on("closed", () => { win = null; app.quit(); });
   });
 
   app.on("window-all-closed", () => app.quit());
   app.on("will-quit", () => globalShortcut.unregisterAll());
-  app.on("before-quit", () => { if (srv) srv.close(); });
+  app.on("before-quit", () => { if (subsReader) subsReader.close(); if (srv) srv.close(); });
 }

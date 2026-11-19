@@ -1,0 +1,100 @@
+/* 登録者カウンター（告知スライド・スロット告知で共通の見た目）。subs-view.js と組で使う */
+.sv { --yt: #ff0033; --gauge: #ffd23c; --skew: -20deg; --sv-border: 3px solid rgba(255,255,255,.95);
+  --sv-shadow: 0 3px 0 rgba(0,0,0,.35), 0 6px 14px rgba(0,0,0,.45);
+  --sv-num: "Oswald", "Bahnschrift", "Arial Narrow", Impact, sans-serif;
+  --sv-jp: "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; }
+.sv .n { font-family: var(--sv-num); font-weight: 700; line-height: 1; letter-spacing: .01em; white-space: nowrap; display: inline-block; font-variant-numeric: tabular-nums; }
+.sv .jp { font-family: var(--sv-jp); font-weight: 900; line-height: 1.2; white-space: nowrap; }
+.sv .ol { color: #fff; -webkit-text-stroke: 7px rgba(10,12,16,.92); paint-order: stroke fill; text-shadow: 0 3px 6px rgba(0,0,0,.45); }
+.sv .pl, .sv.pl { transform: skewX(var(--skew)); border: var(--sv-border); box-shadow: var(--sv-shadow); position: relative; box-sizing: border-box; }
+.sv .un, .sv.un { transform: skewX(calc(var(--skew) * -1)); }
+/* 再生ボタン型のアイコン（白い角丸に赤い三角） */
+.sv .yt { display: inline-block; width: 58px; height: 40px; background: #fff; border-radius: 11px; position: relative; flex: none; }
+.sv .yt::after { content: ""; position: absolute; left: 40%; top: 27.5%; border-left: 17px solid var(--yt); border-top: 9px solid transparent; border-bottom: 9px solid transparent; }
+
+/* 数が増えた瞬間：ぽんと膨らんで黄色く光る */
+.sv .n.bump { animation: sv-bump .9s cubic-bezier(.2,.8,.2,1); }
+@keyframes sv-bump { 0% { transform: scale(1); } 18% { transform: scale(1.16); filter: drop-shadow(0 0 10px rgba(255,210,60,.95)); } 100% { transform: scale(1); filter: none; } }
+.sv .plus { position: absolute; font-family: var(--sv-num); font-weight: 700; color: var(--gauge); -webkit-text-stroke: 5px rgba(10,12,16,.92); paint-order: stroke fill;
+  pointer-events: none; animation: sv-plus 1.6s ease-out forwards; white-space: nowrap; }
+@keyframes sv-plus { 0% { opacity: 0; transform: translateY(10px) scale(.7); } 15% { opacity: 1; transform: translateY(0) scale(1.1); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-34px) scale(1); } }
+
+/* ---- A. SNS プレート型 ---- */
+.sv-plate { background: var(--yt); padding: 10px 34px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.sv-plate .head { display: flex; align-items: center; gap: 16px; position: relative; }
+.sv-plate .n { font-size: 72px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.35); }
+.sv-plate .pill { background: #fff; padding: 4px 26px 6px; align-self: stretch; text-align: center; box-shadow: 0 2px 0 rgba(0,0,0,.25); }
+.sv-plate .pill .jp { display: inline-block; color: var(--yt); font-size: 24px; }
+.sv-plate .plus { right: -10px; top: -26px; font-size: 40px; }
+
+/* ---- B. ドラム型 ---- */
+.sv-drum { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.sv-drum .lbl { font-size: 30px; display: flex; align-items: center; gap: 12px; }
+.sv-drum .row { display: flex; gap: 8px; align-items: flex-end; position: relative; }
+.sv-drum .d { width: 62px; height: 92px; background: linear-gradient(#2a3446, #141a24 50%, #1e2635 50%, #2a3446); overflow: hidden; transition: background .4s; }
+.sv-drum .d::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: rgba(0,0,0,.6); z-index: 1; }
+.sv-drum .d .roll { position: absolute; inset: 0; transform: skewX(20deg); }
+.sv-drum .d .n { position: absolute; left: 0; right: 0; top: 0; height: 92px; display: flex; align-items: center; justify-content: center; font-size: 70px; color: #fff; }
+.sv-drum .d.hot { background: linear-gradient(#ffe27a, #ffd23c 50%, #f2c20f 50%, #ffd23c); }
+.sv-drum .d.hot .n { color: #111; }
+.sv-drum .d .n.out { animation: sv-out .55s cubic-bezier(.5,0,.75,0) forwards; }
+.sv-drum .d .n.in { animation: sv-in .55s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes sv-out { to { transform: translateY(100%); } }
+@keyframes sv-in { from { transform: translateY(-100%); } }
+.sv-drum .comma { font: 700 60px var(--sv-num); color: #fff; -webkit-text-stroke: 5px #0a0c10; paint-order: stroke fill; margin: 0 6px 0 -4px; position: relative; z-index: 1; }
+.sv-drum .plus { right: -54px; top: -20px; font-size: 40px; }
+
+/* ---- C. 目標ゲージ型 ---- */
+.sv-goal { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.sv-goal .p { background: #1b2330; padding: 10px 34px 12px 26px; display: flex; align-items: center; gap: 18px; }
+.sv-goal .p .nums { display: flex; align-items: flex-end; gap: 12px; position: relative; }
+.sv-goal .p .n { font-size: 66px; color: #fff; }
+.sv-goal .p .goal { font: 700 34px var(--sv-num); color: var(--gauge); margin-bottom: 6px; white-space: nowrap; }
+.sv-goal .gauge { display: flex; gap: 6px; margin-left: 16px; }
+.sv-goal .gauge i { display: block; width: 44px; height: 16px; transform: skewX(var(--skew)); background: rgba(0,0,0,.45); box-shadow: 0 0 0 2px rgba(0,0,0,.45); position: relative; overflow: hidden; }
+.sv-goal .gauge i b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gauge); transition: width .8s cubic-bezier(.2,.8,.2,1); }
+.sv-goal .left { font-size: 26px; margin-left: 14px; }
+.sv-goal .left .n { color: var(--gauge); }
+.sv-goal.done .gauge i b { animation: sv-blink 1s steps(2, jump-none) infinite; }
+@keyframes sv-blink { 50% { opacity: .35; } }
+.sv-goal .plus { right: -40px; top: -28px; font-size: 40px; }
+
+/* ---- D. デカ文字型 ---- */
+.sv-big { display: flex; flex-direction: column; align-items: flex-start; }
+.sv-big .t { font-size: 34px; }
+.sv-big .row { display: flex; align-items: flex-end; gap: 16px; position: relative; }
+.sv-big .big { font-size: 120px; }
+.sv-big .delta { background: var(--gauge); color: #111; font: 700 34px var(--sv-num); padding: 2px 18px 4px; transform: skewX(var(--skew)); border: 3px solid #fff; box-shadow: var(--sv-shadow); margin-bottom: 18px; white-space: nowrap; }
+.sv-big .delta > span { display: inline-block; transform: skewX(20deg); }
+.sv-big .delta .jp { font-size: 30px; margin-left: 8px; }
+.sv-big .plus { right: 190px; top: -14px; font-size: 48px; }
+
+/* ---- スロット用 16:9（幅は --w で決まる） ---- */
+.sv-card { position: absolute; inset: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.sv-card .ol { -webkit-text-stroke: calc(var(--w) * .0125) rgba(10,12,16,.92); }
+.sv-card .yt { width: calc(var(--w) * .12); height: calc(var(--w) * .083); border-radius: calc(var(--w) * .023); }
+.sv-card .yt::after { border-left-width: calc(var(--w) * .035); border-top-width: calc(var(--w) * .019); border-bottom-width: calc(var(--w) * .019); }
+.sv-card .plus { font-size: calc(var(--w) * .09); -webkit-text-stroke-width: calc(var(--w) * .01); }
+
+/* E. YouTube の赤 */
+.sv-red { background: var(--yt); gap: calc(var(--w) * .008); }
+.sv-red .t { font-size: calc(var(--w) * .0625); display: flex; gap: calc(var(--w) * .025); align-items: center; }
+.sv-red .numwrap { position: relative; }
+.sv-red .big { font-size: calc(var(--w) * .246); }
+.sv-red .bar { width: 70%; height: calc(var(--w) * .029); transform: skewX(var(--skew)); background: rgba(0,0,0,.4); box-shadow: 0 0 0 2px rgba(0,0,0,.35); position: relative; margin-top: calc(var(--w) * .01); }
+.sv-red .bar b { display: block; height: 100%; background: var(--gauge); transition: width .8s cubic-bezier(.2,.8,.2,1); }
+.sv-red .sub { font-size: calc(var(--w) * .042); margin-top: calc(var(--w) * .006); }
+.sv-red .plus { right: calc(var(--w) * -.08); top: calc(var(--w) * -.02); }
+
+/* F. 黒＋赤の斜め帯（左上の角まで赤） */
+.sv-split { background: #0d1015; align-items: stretch; }
+.sv-split .band, .sv-split .edge { position: absolute; inset: 0; }
+.sv-split .edge { background: #fff; clip-path: polygon(0 0, calc(40% + var(--w) * .012) 0, calc(22% + var(--w) * .012) 100%, 0 100%); }
+.sv-split .band { background: var(--yt); clip-path: polygon(0 0, 40% 0, 22% 100%, 0 100%); }
+.sv-split .yt { position: absolute; left: 7%; top: 50%; transform: translateY(-50%) scale(1.5); transform-origin: 0 50%; }
+.sv-split .in { position: absolute; left: 41%; right: 3%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--w) * .004); }
+.sv-split .t { font-size: calc(var(--w) * .046); color: var(--gauge); font-family: var(--sv-num); font-weight: 700; letter-spacing: .02em; }
+.sv-split .numwrap { position: relative; }
+.sv-split .big { font-size: calc(var(--w) * .2); }
+.sv-split .sub { font-size: calc(var(--w) * .042); color: #fff; }
+.sv-split .plus { right: calc(var(--w) * -.07); top: calc(var(--w) * -.02); }

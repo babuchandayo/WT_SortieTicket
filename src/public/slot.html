@@ -5,6 +5,8 @@
 <title>SortieTicket slot</title>
 <link rel="stylesheet" href="/fonts/oswald/700.css">
 <link rel="stylesheet" href="/fonts/noto/900.css">
+<link rel="stylesheet" href="/subs-view.css">
+<script src="/subs-view.js"></script>
 <style>
   /* スロット告知: 16:9 のスライドを 1 本のリールに並べ、上から下へ回して 1 枚に止める */
   :root {
@@ -81,14 +83,19 @@
   var hideTimer = null;
 
   function h(tag, cls, text) { var el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; }
-  function playable(s) { return s.on && !!(s.image || s.title); }
+  function playable(s) { return s.on && (s.kind === "subs" || !!(s.image || s.title)); }
   function list() { return slot ? slot.slides.filter(playable) : []; }
+  // 回っている間のリールに流すもの（「リールに出す」がオフの隠しスライドは、当たるまで見せない）
+  function reelList() { return list().filter(function (s) { return s.reel !== false; }); }
+  // 流せるものが 1 枚もないときの「？」カード
+  var MYSTERY = { id: "?", color: "dark", title: "？", image: "", kind: "image" };
   function byId(id) { if (!slot) return null; for (var i = 0; i < slot.slides.length; i++) if (slot.slides[i].id === id) return slot.slides[i]; return null; }
   function now() { return Date.now() + skew; }
 
   function card(s) {
     var el = h("div", "card c-" + (s ? s.color : "dark"));
     if (!s) return el;
+    if (s.kind === "subs") { el.appendChild(SubsView.build(s.look, { sub: s.sub })); return el; }
     if (s.image) { var i = h("img"); i.src = "/promo-img/" + s.image; i.alt = ""; el.appendChild(i); }
     else if (s.title) el.appendChild(h("div", "label", s.title));
     return el;
@@ -97,7 +104,7 @@
   // 止まっている状態の表示（1 枚だけ）
   function showStill(id) {
     var s = byId(id);
-    if (!s || !playable(s)) { var l = list(); s = l.length ? l[0] : null; }
+    if (!s || !playable(s)) { var l = reelList(); if (!l.length) l = list(); s = l.length ? l[0] : null; }
     shownId = s ? s.id : null;
     strip.textContent = ""; strip.style.transform = "";
     strip.appendChild(card(s));
@@ -131,7 +138,7 @@
     if (anim) { anim.cancel(); anim = null; }
     var dur = sp.spinMs - (now() - sp.at);
     if (dur < 600) { showStill(sp.id); finish(false); return; }
-    var pool = list(); if (!pool.length) pool = [target];
+    var pool = reelList(); if (!pool.length) pool = [MYSTERY];
     var cur = byId(shownId) || pool[0];
     var n = Math.max(10, Math.round(dur / 1000 * 7));
     var seq = [cur];   // 下から順（最初に見えるのが今のスライド）
@@ -217,6 +224,10 @@
       spin = d.spin;
       if (first) { doneSeq = d.spin.seq; if (now() < d.spin.at + d.spin.spinMs - 600) { doneSeq = 0; play(d.spin); } else { showStill(d.spin.id); updateVisible(); } }
     }
+  });
+  es.addEventListener("subs", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    SubsView.set(d.view);
   });
   es.addEventListener("slot-spin", function (ev) {
     var d; try { d = JSON.parse(ev.data); } catch (e) { return; }

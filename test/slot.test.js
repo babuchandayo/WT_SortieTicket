@@ -27,14 +27,30 @@ test("sanitizeSlot は不正な値を補正する", () => {
     last: "zz",
   });
   assert.deepStrictEqual(p.slides, [
-    { id: "a", on: true, weight: 1, title: "Discord告知", color: "dark", image: "" },
-    { id: "b", on: false, weight: 100, title: "", color: "air", image: "0123456789abcdef.webp" },
+    { id: "a", on: true, weight: 1, title: "Discord告知", color: "dark", image: "", kind: "image", look: "red", sub: "", reel: true },
+    { id: "b", on: false, weight: 100, title: "", color: "air", image: "0123456789abcdef.webp", kind: "image", look: "red", sub: "", reel: true },
   ]);
   assert.deepStrictEqual(p.settings, { on: true, spinSec: 15, autoEvery: 10, hold: 0, width: 160, frame: true, hAlign: "left", vAlign: "middle", hotkey: "Ctrl+Alt+S" });
   assert.strictEqual(p.last, null);
   assert.strictEqual(sanitizeSlot({ slides: [{ id: "a", title: "x" }], settings: { hotkey: "" }, last: "a" }).last, "a");
   assert.strictEqual(sanitizeSlot({ settings: { hotkey: "" } }).settings.hotkey, "");
   assert.throws(() => sanitizeSlot(null));
+  // 登録者カウンターと「リールに流す」スイッチ
+  const k = sanitizeSlot({ slides: [{ id: "k", kind: "subs", look: "split", sub: "よろしく\n！", reel: false }, { id: "x", kind: "??", look: "??", reel: "no" }] }).slides;
+  assert.deepStrictEqual([k[0].kind, k[0].look, k[0].sub, k[0].reel], ["subs", "split", "よろしく！", false]);
+  assert.deepStrictEqual([k[1].kind, k[1].look, k[1].reel], ["image", "red", true]);
+});
+
+test("抽選: 登録者カウンターは画像や文字がなくても対象。隠しスライドも抽選には入る", () => {
+  const slides = [
+    { id: "s", on: true, weight: 1, title: "", image: "", kind: "subs", reel: true },
+    { id: "h", on: true, weight: 1, title: "隠し", image: "", kind: "image", reel: false },
+  ];
+  const seen = new Set();
+  const rnd = seeded(3);
+  let last = null;
+  for (let i = 0; i < 50; i++) { const s = pickNext(slides, last, rnd); seen.add(s.id); last = s.id; }
+  assert.deepStrictEqual([...seen].sort(), ["h", "s"]);
 });
 
 test("抽選: 同じスライドは連続せず、重みの比で選ばれる", () => {

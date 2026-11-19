@@ -5,6 +5,8 @@
 <title>SortieTicket promo</title>
 <link rel="stylesheet" href="/fonts/oswald/700.css">
 <link rel="stylesheet" href="/fonts/noto/900.css">
+<link rel="stylesheet" href="/subs-view.css">
+<script src="/subs-view.js"></script>
 <style>
   /* 分隊ランク表示（overlay.html）と同じ部品感：斜めのプレート・白フチ・Oswald / Noto Sans JP 900・黄色のアクセント */
   :root {
@@ -100,6 +102,9 @@
   .t-imagetext.c-dark .title { color: var(--gauge); }
   .t-imagetext.c-yellow .jp { color: #111; text-shadow: none; }
 
+  /* ---- 登録者カウンター（見た目は subs-view.css） ---- */
+  .t-subs .sv { margin-top: 26px; }
+
   /* 残り時間のバー（分隊ランクの試合数ゲージと同じ黄色・傾き） */
   .bar { align-self: stretch; height: 10px; margin: 2px 6px 0 14px; transform: skewX(var(--skew)); background: rgba(0,0,0,.35); box-shadow: 0 0 0 2px rgba(0,0,0,.35); }
   .bar i { display: block; height: 100%; background: var(--gauge); transform-origin: left; }
@@ -141,6 +146,7 @@
     if (s.tpl === "image") return !!s.image;
     if (s.tpl === "imagetext") return !!(s.image || s.title || s.body);
     if (s.tpl === "sns") return true;
+    if (s.tpl === "subs") return preview || SubsView.view.count != null;   // 数がまだ取れていなければ飛ばす
     return !!(s.title || s.body);
   }
 
@@ -172,6 +178,8 @@
       if (s.frame) el.classList.add("frame");
       if (s.image) el.appendChild(img(s.image));
       if (s.title) el.appendChild(h("div", "jp outline caption", s.title));
+    } else if (s.tpl === "subs") {
+      el.appendChild(SubsView.build(s.look, { label: s.title, sub: s.sub }));
     } else if (s.tpl === "imagetext") {
       var ip = el.appendChild(h("div", "plate"));
       if (s.image) ip.appendChild(h("div", "pic unskew")).appendChild(img(s.image));
@@ -283,9 +291,17 @@
     if (d.type === "promo-state") render(d.promo, { focus: d.focus });
   });
 
-  // 本番: アプリからの配信（Server-Sent Events。切れても自動で再接続）
+  // アプリからの配信（Server-Sent Events。切れても自動で再接続）
+  var es = new EventSource("/events");
+  // 登録者数はプレビューでも受け取る。数が取れた／取れなくなったときは流すスライドが変わるので作り直す
+  es.addEventListener("subs", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    var had = SubsView.view.count != null;
+    SubsView.set(d.view);
+    if (promo && had !== (SubsView.view.count != null)) render(promo, { focus: focusId });
+  });
+  // 本番: スライドの内容もアプリから受け取る（プレビューは操作画面から postMessage で受け取る）
   if (!preview || q.has("live")) {
-    var es = new EventSource("/events");
     es.addEventListener("promo", function (ev) {
       try { render(JSON.parse(ev.data).promo); } catch (e) {}
     });

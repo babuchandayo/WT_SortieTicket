@@ -24,8 +24,8 @@ test("sanitizePromo は不正な値を補正する", () => {
     settings: { on: "yes", transition: "spin", gap: -5, scale: 1000, hAlign: "center", vAlign: "nope" },
   });
   assert.deepStrictEqual(p.slides, [
-    { id: "a", on: true, tpl: "sns", sec: 3, title: "Discord", body: "1\n2\n3\n4\n5\n6", sub: "招待リンクは概要欄へ", service: "discord", style: "plain", color: "dark", image: "", size: 300, frame: false },
-    { id: "b", on: false, tpl: "text", sec: 10, title: "", body: "", sub: "", service: "discord", style: "plain", color: "dark", image: "0123456789abcdef.png", size: 100, frame: false },
+    { id: "a", on: true, tpl: "sns", sec: 3, title: "Discord", body: "1\n2\n3\n4\n5\n6", sub: "招待リンクは概要欄へ", service: "discord", style: "plain", color: "dark", image: "", size: 300, frame: false, look: "plate" },
+    { id: "b", on: false, tpl: "text", sec: 10, title: "", body: "", sub: "", service: "discord", style: "plain", color: "dark", image: "0123456789abcdef.png", size: 100, frame: false, look: "plate" },
   ]);
   assert.deepStrictEqual(p.settings, { on: true, transition: "fade", gap: 0, showBar: true, scale: 300, hAlign: "center", vAlign: "bottom" });
   assert.throws(() => sanitizePromo(null));

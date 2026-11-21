@@ -2,7 +2,9 @@
 // 告知スライドショーの状態と検査。
 // 分隊ランク（state.js）・勝敗カウンター（counter.js）とは別の promo.json に保存する。
 
-const TEMPLATES = ["text", "sns", "image", "imagetext"];
+const TEMPLATES = ["text", "sns", "image", "imagetext", "subs"];
+// 登録者カウンターの見た目（A プレート / B ドラム / C 目標ゲージ / D デカ文字）
+const SUBS_LOOKS = ["plate", "drum", "goal", "big"];
 const COLORS = ["dark", "air", "ground", "green", "yellow", "red", "purple"];
 const SERVICES = ["discord", "x", "youtube", "twitch", "tiktok", "other"];
 const STYLES = ["plain", "plate"];
@@ -75,6 +77,7 @@ function sanitizeSlide(s) {
     image: typeof s.image === "string" && IMAGE_RE.test(s.image) ? s.image : "",
     size: int(s.size, LIMITS.minSize, LIMITS.maxSize, 100),
     frame: s.frame === true,
+    look: pick(s.look, SUBS_LOOKS, "plate"),
   };
 }
 
@@ -119,6 +122,6 @@ function usedImages(promo) {
 }
 
 module.exports = {
-  TEMPLATES, COLORS, SERVICES, LIMITS, IMAGE_RE,
+  TEMPLATES, SUBS_LOOKS, COLORS, SERVICES, LIMITS, IMAGE_RE,
   defaultPromo, defaultPromoSettings, sanitizePromo, sanitizeSlide, imageExt, usedImages,
 };

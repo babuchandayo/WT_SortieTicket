@@ -10,6 +10,8 @@ const { sanitizeHotkey } = require("./counter");
 const COLORS = ["dark", "air", "ground", "green", "yellow", "red", "purple"];
 const H_ALIGN = ["left", "center", "right"];
 const V_ALIGN = ["top", "middle", "bottom"];
+const KINDS = ["image", "subs"];          // image = 画像か文字 / subs = 登録者カウンター
+const SUBS_LOOKS = ["red", "split"];      // E = YouTube の赤 / F = 黒＋赤の斜め帯
 const LIMITS = {
   maxSlides: 30,
   minWeight: 1, maxWeight: 100,
@@ -18,6 +20,7 @@ const LIMITS = {
   maxHold: 3600,
   minWidth: 160, maxWidth: 1920,
   title: 40,
+  sub: 40,
 };
 
 function defaultSlotSettings() {
@@ -59,6 +62,10 @@ function sanitizeSlotSlide(s) {
     title: line(s.title, LIMITS.title),
     color: pick(s.color, COLORS, "dark"),
     image: typeof s.image === "string" && IMAGE_RE.test(s.image) ? s.image : "",
+    kind: pick(s.kind, KINDS, "image"),
+    look: pick(s.look, SUBS_LOOKS, "red"),
+    sub: line(s.sub, LIMITS.sub),
+    reel: s.reel !== false,   // 回っている間のリールに流す（オフ = 当たるまで見せない隠しスライド）
   };
 }
 
@@ -91,8 +98,8 @@ function sanitizeSlot(p) {
   return { slides, settings: sanitizeSlotSettings(p.settings), last };
 }
 
-// 抽選の対象（オンで、画像か文字のどちらかがあるもの）
-function playable(s) { return s.on && !!(s.image || s.title); }
+// 抽選の対象（オンで、画像か文字のどちらかがあるもの。登録者カウンターはいつでも対象）
+function playable(s) { return s.on && (s.kind === "subs" || !!(s.image || s.title)); }
 function candidates(slot) { return slot.slides.filter(playable); }
 
 // 重み付きの抽選。直前に出たスライド（lastId）は除く。
@@ -139,7 +146,7 @@ function usedSlotImages(slot) {
 }
 
 module.exports = {
-  COLORS, LIMITS,
+  COLORS, KINDS, SUBS_LOOKS, LIMITS,
   defaultSlot, defaultSlotSettings, sanitizeSlot, sanitizeSlotSlide, sanitizeSlotSettings,
   playable, candidates, pickNext, longRunRates, usedSlotImages,
 };

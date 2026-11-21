@@ -139,6 +139,16 @@
   .tpl-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 4px; background: #2a313b; color: #c9d1db; white-space: nowrap; flex: none; }
   .tpl-badge.text { background: #33402a; color: #c8f0a0; } .tpl-badge.sns { background: #2d3266; color: #c3c8ff; }
   .tpl-badge.image { background: #4a3a1a; color: #ffd98a; } .tpl-badge.imagetext { background: #3e2a4a; color: #e9c3ff; }
+  .tpl-badge.subs { background: #5a1420; color: #ffb3c0; } .tpl-badge.hide { background: #3a3a3a; color: #e0e0e0; }
+  /* 登録者数の取り方 */
+  .subs-now { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .subs-now .big { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .subs-now .delta { color: var(--gauge); font-weight: 700; }
+  .subs-st { font-size: 12px; padding: 3px 8px; border-radius: 5px; background: #2a313b; }
+  .subs-st.ok { background: #173a28; color: #8ff0b8; } .subs-st.ng { background: #4a1c1c; color: #ffb0b0; } .subs-st.wait { background: #3a3414; color: #ffe08a; }
+  .subs-box input.num-in { width: 9em; font-variant-numeric: tabular-nums; }
+  .subs-box details { margin-top: 6px; } .subs-box summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .subs-box ol { margin: 6px 0 0; padding-left: 1.4em; color: var(--muted); font-size: 12px; line-height: 1.6; }
   .sum { flex: 1 1 0; width: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sum .warn-t { color: var(--ng); font-size: 12px; margin-left: 6px; }
   .secs { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -344,11 +354,14 @@
         <button data-padd="sns">＋ SNS・Discord 誘導</button>
         <button data-padd="image">＋ 画像</button>
         <button data-padd="imagetext">＋ 画像＋テキスト</button>
+        <button data-padd="subs">＋ 登録者カウンター</button>
       </div>
       <ol id="slides"></ol>
     </section>
 
     <section id="pEditor"></section>
+
+    <section class="subs-box" data-subs-box hidden></section>
 
     <section>
       <div class="row" style="margin-bottom:8px">
@@ -404,6 +417,8 @@
     </section>
 
     <section id="sEditor"></section>
+
+    <section class="subs-box" data-subs-box hidden></section>
 
     <section>
       <h2>プレビュー（配信に映る見た目。「回す」もここに映ります）</h2>
@@ -885,7 +900,9 @@
   // ==== 告知スライド ====
   var promo = null, prev = -1, pInflight = 0, selId = loadLocal("sortie-promo-sel", null);
   var pvMode = loadLocal("sortie-promo-pv", "one") === "all" ? "all" : "one";
-  var TPL_NAME = { text: "テキスト", sns: "SNS", image: "画像", imagetext: "画像＋文" };
+  var TPL_NAME = { text: "テキスト", sns: "SNS", image: "画像", imagetext: "画像＋文", subs: "登録者" };
+  var SUBS_LOOKS = [["plate", "A プレート"], ["drum", "B ドラム"], ["goal", "C 目標ゲージ"], ["big", "D デカ文字"]];
+  var SUBS_LOOK_NAME = {}; SUBS_LOOKS.forEach(function (l) { SUBS_LOOK_NAME[l[0]] = l[1]; });
   var SERVICES = [["discord", "Discord"], ["x", "X"], ["youtube", "YouTube"], ["twitch", "Twitch"], ["tiktok", "TikTok"], ["other", "その他"]];
   var SERVICE_NAME = {}; SERVICES.forEach(function (s) { SERVICE_NAME[s[0]] = s[0] === "other" ? "" : s[1]; });
   var COLORS = [["dark", "#1b2330", "濃紺"], ["air", "#1687f2", "青（空）"], ["ground", "#ff6a00", "オレンジ（陸）"], ["green", "#1fa055", "緑"], ["yellow", "#ffd23c", "黄"], ["red", "#e5484d", "赤"], ["purple", "#8a4dff", "紫"]];
@@ -894,6 +911,7 @@
     sns: { service: "discord", title: "", sub: "招待リンクは概要欄へ", body: "" },
     image: { title: "", size: 100, frame: false },
     imagetext: { title: "タイトル", body: "本文", color: "dark", size: 100 },
+    subs: { title: "", sub: "今日", look: "plate" },
   };
   var IMG_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
@@ -902,7 +920,7 @@
   function playable(s) {
     if (s.tpl === "image") return !!s.image;
     if (s.tpl === "imagetext") return !!(s.image || s.title || s.body);
-    if (s.tpl === "sns") return true;
+    if (s.tpl === "sns" || s.tpl === "subs") return true;
     return !!(s.title || s.body);
   }
 
@@ -956,6 +974,7 @@
     }
     drawPromoSettings();
     showPPreview();
+    drawSubsBox();
   }
 
   var pMovedId = null;
@@ -967,6 +986,7 @@
     ol.innerHTML = promo.slides.map(function (s, i) {
       var sum = s.tpl === "sns" ? (s.title || SERVICE_NAME[s.service] || "SNS") + (s.sub ? " ／ " + s.sub : "")
         : s.tpl === "image" ? (s.title || "（画像）")
+        : s.tpl === "subs" ? SUBS_LOOK_NAME[s.look] + (s.title ? " ／ " + s.title : "")
         : (s.title || s.body.split("\n")[0] || "（空）");
       var warn = !playable(s) ? '<span class="warn-t">' + (s.tpl === "image" ? "画像が未設定" : "中身が空") + "</span>" : "";
       return '<li data-id="' + s.id + '" class="' + (s.id === selId ? "sel" : "") + (s.on ? "" : " off") + '">' +
@@ -1020,11 +1040,12 @@
     b.onclick = function () {
       if (promo && promo.slides.length >= 30) { toast("スライドは30枚までです"); return; }
       var tpl = b.dataset.padd;
-      var s = Object.assign({ id: uid(), on: true, tpl: tpl, sec: 10, title: "", body: "", sub: "", service: "discord", style: "plain", color: "dark", image: "", size: 100, frame: false }, PRESET[tpl]);
+      var s = Object.assign({ id: uid(), on: true, tpl: tpl, sec: 10, title: "", body: "", sub: "", service: "discord", style: "plain", color: "dark", image: "", size: 100, frame: false, look: "plate" }, PRESET[tpl]);
       selId = s.id;
       pCommit(function (p) { p.slides.push(s); });
       var t = $("pEditor").querySelector("input[type=text], textarea");
       if (tpl === "image") toast("画像を選んでください");
+      else if (tpl === "subs") toast(subsData && subsData.view.count != null ? "デザインを選んでください" : "下の「登録者数の取り方」を設定してください");
       else if (t) { t.focus(); t.select(); }
     };
   });
@@ -1069,6 +1090,12 @@
       row("大きさ", stepper("size", s.size, "%"));
       row("白フチ", '<button class="toggle' + (s.frame ? " on" : "") + '" data-ef="frame" data-v="' + (!s.frame) + '">' + (s.frame ? "オン" : "オフ") + "</button>");
       row("下に出す文字", text("title", s.title, "なくても可", 60));
+    } else if (s.tpl === "subs") {
+      row("デザイン", seg("look", SUBS_LOOKS, s.look));
+      if (s.look !== "goal") row("見出し", text("title", s.title, s.look === "drum" ? "チャンネル登録者数" : "チャンネル登録者", 60));
+      else row("目標なしのとき", text("title", s.title, "チャンネル登録者", 60));
+      if (s.look === "big") row("増加数の後ろ", text("sub", s.sub, "今日", 60) + '<div class="muted" style="margin-top:4px">例: 「+12 今日」。増加数は毎日 0 時に 0 に戻ります（下の設定で今から数え直すこともできます）。</div>');
+      if (s.look === "goal") rows.push('<span class="lab2"></span><div class="muted">目標人数は下の「登録者数の取り方」で設定します（0 にするとゲージは出ません）。</div>');
     } else {
       row("画像", drop(s, true));
       row("画像の大きさ", stepper("size", s.size, "%"));
@@ -1191,7 +1218,7 @@
   var slot = null, srev = -1, sInflight = 0, sSpin = null, sSkew = 0, sSelId = loadLocal("sortie-slot-sel", null);
   function sById(id) { if (!slot) return null; for (var i = 0; i < slot.slides.length; i++) if (slot.slides[i].id === id) return slot.slides[i]; return null; }
   function sIndex(id) { for (var i = 0; i < slot.slides.length; i++) if (slot.slides[i].id === id) return i; return -1; }
-  function sPlayable(s) { return s.on && !!(s.image || s.title); }
+  function sPlayable(s) { return s.on && (s.kind === "subs" || !!(s.image || s.title)); }
   function sColor(c) { for (var i = 0; i < COLORS.length; i++) if (COLORS[i][0] === c) return COLORS[i][1]; return COLORS[0][1]; }
 
   var sPending = false;
@@ -1241,7 +1268,7 @@
     b.classList.toggle("busy", busy);
     b.textContent = busy ? "🎰 回転中…" : "🎰 回す";
     var last = sById(slot.last);
-    $("sSpinInfo").textContent = busy ? "" : last ? "前回: " + (last.title || "（画像）") : "まだ回していません";
+    $("sSpinInfo").textContent = busy ? "" : last ? "前回: " + (last.title || (last.kind === "subs" ? "登録者カウンター" : "（画像）")) : "まだ回していません";
     clearTimeout(drawSpin.t);
     if (busy) drawSpin.t = setTimeout(drawSpin, sSpin.at + sSpin.spinMs - Date.now() - sSkew + 30);
   }
@@ -1291,6 +1318,7 @@
     drawSlotSettings();
     drawSpin();
     showSPreview();
+    drawSubsBox();
   }
 
   var sMovedId = null;
@@ -1307,12 +1335,16 @@
     var spinning = sSpinning();
     ol.innerHTML = slot.slides.map(function (s, i) {
       var ok = sPlayable(s);
-      var thumb = '<span class="thumb" style="background:' + sColor(s.color) + '">' + (s.image ? '<img src="/promo-img/' + s.image + '" alt="">' : esc((s.title || "").slice(0, 4))) + "</span>";
-      var sum = esc(s.title || (s.image ? "（画像）" : "（空）")) + (!s.image && !s.title ? '<span class="warn-t">画像か文字を入れてください</span>' : "");
+      var isSubs = s.kind === "subs";
+      var thumb = isSubs ? '<span class="thumb" style="background:' + (s.look === "split" ? "linear-gradient(105deg,#ff0033 0 38%,#fff 38% 41%,#0d1015 41%)" : "#ff0033") + '">' + esc(subsData && subsData.view.count != null ? SubsView_fmt(subsData.view.count) : "登録者") + "</span>"
+        : '<span class="thumb" style="background:' + sColor(s.color) + '">' + (s.image ? '<img src="/promo-img/' + s.image + '" alt="">' : esc((s.title || "").slice(0, 4))) + "</span>";
+      var sum = isSubs ? esc(s.title || "登録者カウンター（" + (s.look === "split" ? "F" : "E") + "）")
+        : esc(s.title || (s.image ? "（画像）" : "（空）")) + (!s.image && !s.title ? '<span class="warn-t">画像か文字を入れてください</span>' : "");
+      var hideBadge = s.reel === false ? '<span class="tpl-badge hide" title="回っている間は流れず、当たったときだけ出ます">隠し</span>' : "";
       var rate = ok ? "<b>" + pct(s.weight / W) + '</b><span title="同じものが連続しない条件で長く回したときの出現率">実際 ' + pct(rates[s.id] || 0) + "</span>" : '<span>対象外</span>';
       return '<li data-id="' + s.id + '" class="' + (s.id === sSelId ? "sel" : "") + (s.on ? "" : " off") + (!spinning && s.id === slot.last ? " hit" : "") + '">' +
         '<button class="sw' + (s.on ? " on" : "") + '" data-sact="on" title="抽選に入れる/外す" aria-label="抽選に入れる"></button>' +
-        thumb + '<span class="sum">' + sum + "</span>" +
+        thumb + '<span class="sum">' + sum + "</span>" + hideBadge +
         '<span class="weight" title="重み（1〜100）"><button data-sact="w-">−</button><input data-sw="' + s.id + '" inputmode="numeric" value="' + s.weight + '" aria-label="重み"><button data-sact="w+">＋</button></span>' +
         '<span class="rate">' + rate + "</span>" +
         '<span class="ops"><button data-sact="up" title="上へ"' + (i === 0 ? " disabled" : "") + ">▲</button>" +
@@ -1337,7 +1369,7 @@
     var act = b.dataset.sact;
     if (act === "del") {
       var s0 = sById(id);
-      if (!confirm("「" + (s0.title || "画像のスライド") + "」を削除しますか？")) return;
+      if (!confirm("「" + (s0.title || (s0.kind === "subs" ? "登録者カウンター" : "画像のスライド")) + "」を削除しますか？")) return;
     }
     sCommit(function (p) {
       var i = sIndex(id); if (i < 0) return;
@@ -1364,7 +1396,7 @@
   $("sAdd").onclick = function () {
     if (!slot) { toast("読み込み中です"); return; }
     if (slot.slides.length >= 30) { toast("スライドは30枚までです"); return; }
-    var s = { id: uid(), on: true, weight: 10, title: "", color: "dark", image: "" };
+    var s = { id: uid(), on: true, weight: 10, title: "", color: "dark", image: "", kind: "image", look: "red", sub: "", reel: true };
     sSelId = s.id;
     sCommit(function (p) { p.slides.push(s); });
     toast("画像を選ぶか、文字を入れてください");
@@ -1375,6 +1407,19 @@
     if (!s) { box.innerHTML = '<h2>編集</h2><div class="empty">スライドを追加・選択すると、ここで内容を編集できます。</div>'; return; }
     var rows = [];
     function row(label, html) { rows.push('<span class="lab2">' + label + "</span><div>" + html + "</div>"); }
+    var kindSeg = '<div class="seg2">' + [["image", "画像・文字"], ["subs", "登録者カウンター"]].map(function (k) { return '<button data-sef="kind" data-v="' + k[0] + '" class="' + (k[0] === (s.kind || "image") ? "on" : "") + '">' + k[1] + "</button>"; }).join("") + "</div>";
+    row("種類", kindSeg);
+    var reelRow = '<button class="toggle' + (s.reel !== false ? " on" : "") + '" data-sef="reel" data-v="' + (s.reel === false) + '">' + (s.reel !== false ? "出す" : "出さない（隠し）") + "</button>" +
+      '<div class="muted" style="margin-top:4px">' + (s.reel !== false ? "回っている間のリールにも流れます。" : "回っている間は流れず、当たったときに初めて姿を見せます（抽選には入っています）。") + "</div>";
+    if (s.kind === "subs") {
+      row("デザイン", '<div class="seg2">' + [["red", "E YouTube の赤"], ["split", "F 黒＋赤の斜め帯"]].map(function (k) { return '<button data-sef="look" data-v="' + k[0] + '" class="' + (k[0] === s.look ? "on" : "") + '">' + k[1] + "</button>"; }).join("") + "</div>");
+      row("下の一言", '<input type="text" data-set-t="sub" maxlength="40" placeholder="' + (s.look === "split" ? "チャンネル登録 よろしく！" : "なくても可") + '" value="' + esc(s.sub || "") + '">' +
+        '<div class="muted" style="margin-top:4px">' + (s.look === "split" ? "空欄なら「チャンネル登録 よろしく！」" : "目標人数を設定しているときは、目標までの人数を表示します") + "</div>");
+      row("名前", '<input type="text" data-set-t="title" maxlength="40" placeholder="登録者カウンター" value="' + esc(s.title) + '">');
+      row("リールに出す", reelRow);
+      box.innerHTML = "<h2>編集</h2>" + '<div class="ed-grid">' + rows.join("") + "</div>";
+      return;
+    }
     row("画像（16:9）", '<div class="drop" id="sDrop" tabindex="0">' + (s.image ? '<img src="/promo-img/' + s.image + '" alt="">' : "") +
       '<span class="muted">' + (s.image ? "クリックまたはドロップで差し替え" : "クリックで画像を選ぶ／ここへドラッグ＆ドロップ／Ctrl+V で貼り付け") +
       "<br>PNG・JPEG・GIF・WebP、10MB まで。16:9 でない画像は中央を切り抜いて表示します</span>" +
@@ -1384,6 +1429,7 @@
       '<div class="muted" style="margin-top:4px">一覧での名前です。画像がないときは、この文字をスライドに大きく表示します。</div>');
     row(s.image ? "背景の色" : "背景の色", '<div class="chips">' + COLORS.map(function (c) { return '<button data-sef="color" data-v="' + c[0] + '" title="' + c[2] + '" style="background:' + c[1] + '" class="' + (c[0] === s.color ? "on" : "") + '"></button>'; }).join("") + "</div>" +
       (s.image ? '<div class="muted" style="margin-top:4px">透過 PNG の透けた部分に出ます。</div>' : ""));
+    row("リールに出す", reelRow);
     box.innerHTML = "<h2>編集</h2>" + '<div class="ed-grid">' + rows.join("") + "</div>";
     var dz = $("sDrop");
     dz.onclick = function (ev) { if (!ev.target.closest("button")) $("sFile").click(); };
@@ -1394,7 +1440,10 @@
     $("sFile").onchange = function () { var f = this.files[0]; if (f) sUpload(f); this.value = ""; };
   }
   function sSetField(field, v, opts) { var id = sSelId; sCommit(function () { var s = sById(id); if (s) s[field] = v; }, opts); }
-  $("sEditor").addEventListener("click", function (ev) { var b = ev.target.closest("button[data-sef]"); if (b) sSetField(b.dataset.sef, b.dataset.v); });
+  $("sEditor").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-sef]"); if (!b) return;
+    sSetField(b.dataset.sef, b.dataset.sef === "reel" ? b.dataset.v === "true" : b.dataset.v);
+  });
   $("sEditor").addEventListener("input", function (ev) { var f = ev.target.dataset.setT; if (f) sSetField(f, ev.target.value, { later: true, keepEditor: true }); });
 
   function sUpload(file) {
@@ -1528,6 +1577,107 @@
   }
   window.addEventListener("resize", fitSPreview);
   $("spreview").addEventListener("load", function () { fitSPreview(); showSPreview(); });
+
+  // ==== 登録者カウンター（告知スライド・スロット告知で共通の設定） ====
+  var subsData = null;   // { rev, subs, view, status }
+  function SubsView_fmt(n) { return n == null ? "----" : Number(n).toLocaleString("en-US"); }
+  es.addEventListener("subs", function (ev) {
+    var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+    subsData = d;
+    drawSubsBox();
+    if (slot) drawSlotList();
+  });
+  function subsPut(settings) {
+    return fetch("/api/subs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings: settings }) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); })
+      .catch(function () { toast("保存できませんでした。アプリが起動しているか確認してください"); });
+  }
+  function hm(ms) { var t = new Date(ms); return t.getHours() + ":" + String(t.getMinutes()).padStart(2, "0") + ":" + String(t.getSeconds()).padStart(2, "0"); }
+  function subsStatusHtml() {
+    var st = subsData.status, sb = subsData.subs;
+    if (sb.source === "manual") return '<span class="subs-st">手入力の数を表示中</span>';
+    if (st.state === "noapp") return '<span class="subs-st wait">自動取得は SortieTicket アプリの起動中だけ動きます（このページはブラウザで開かれています）</span>';
+    if (st.state === "ok") return '<span class="subs-st ok">✓ YouTube Studio から取得中' + (sb.readAt ? "（" + hm(sb.readAt) + " 時点）" : "") + "</span>";
+    var cls = st.state === "login" || st.state === "error" ? "ng" : "wait";
+    return '<span class="subs-st ' + cls + '">' + esc(st.message || "準備中…") + "</span>";
+  }
+  function drawSubsBox() {
+    var boxes = document.querySelectorAll("[data-subs-box]");
+    var need = {
+      promo: !!(promo && promo.slides.some(function (x) { return x.tpl === "subs"; })),
+      slot: !!(slot && slot.slides.some(function (x) { return x.kind === "subs"; })),
+    };
+    Array.prototype.forEach.call(boxes, function (box) {
+      var tab = box.closest(".tabpanel").id === "tab-promo" ? "promo" : "slot";
+      box.hidden = !need[tab] || !subsData;
+      if (box.hidden) return;
+      var ae = document.activeElement;
+      if (ae && box.contains(ae) && ae.tagName === "INPUT") {
+        // 入力中は欄を作り直さず、状態の表示だけ更新する
+        var stEl = box.querySelector("[data-subs-st]"); if (stEl) stEl.innerHTML = subsNowHtml();
+        return;
+      }
+      box.innerHTML = subsBoxHtml();
+    });
+  }
+  function subsNowHtml() {
+    var v = subsData.view, sb = subsData.subs;
+    var base = sb.base ? new Date(sb.base.at) : null;
+    return '<span class="big">' + SubsView_fmt(v.count) + "</span><span>人</span>" +
+      (v.delta != null ? '<span class="delta" title="' + (base ? (base.getMonth() + 1) + "/" + base.getDate() + " " + base.getHours() + ":" + String(base.getMinutes()).padStart(2, "0") + " の " + SubsView_fmt(sb.base.count) + " 人から" : "") + '">' + (v.delta < 0 ? "−" + SubsView_fmt(-v.delta) : "+" + SubsView_fmt(v.delta)) + "（増加数）</span>" : "") +
+      subsStatusHtml();
+  }
+  function subsBoxHtml() {
+    var sb = subsData.subs, app = !!(window.sortieApp && window.sortieApp.subsLogin);
+    var rows = [];
+    function row(label, html) { rows.push('<span class="lab2">' + label + "</span><div>" + html + "</div>"); }
+    row("取り方", '<div class="seg2">' + [["studio", "YouTube Studio から自動"], ["manual", "手入力"]].map(function (k) { return '<button data-subs-src="' + k[0] + '" class="' + (k[0] === sb.source ? "on" : "") + '">' + k[1] + "</button>"; }).join("") + "</div>");
+    if (sb.source === "studio") {
+      row("Studio の URL", '<input type="text" data-subs-in="url" placeholder="https://studio.youtube.com/channel/…" value="' + esc(sb.url) + '">' +
+        '<details><summary>URL の調べ方</summary><ol><li>ブラウザで YouTube Studio を開く</li><li>左のメニューの「アナリティクス」→ 右側の「現在の登録者数」のカードにある「詳細」（または「ライブカウントを表示」）を開く</li><li>大きく登録者数が表示されたページのアドレスをコピーして、ここに貼り付ける</li></ol></details>');
+      row("ログイン", app
+        ? '<div class="row"><button data-subs-act="login" class="primary">ログイン</button><button data-subs-act="reload">読み直す</button><button data-subs-act="logout">ログアウト</button></div>' +
+          '<div class="muted" style="margin-top:4px">初回はログインが必要です。開いたウィンドウで YouTube にログインし、登録者数のページが出たら閉じてください。数日でログアウトされることがあります。</div>'
+        : '<div class="muted">ログインは SortieTicket アプリのウィンドウから行ってください。</div>');
+    } else {
+      row("人数", '<input type="number" class="num-in" min="0" data-subs-in="manual" value="' + sb.manual + '"> 人');
+    }
+    row("目標人数", '<input type="number" class="num-in" min="0" data-subs-in="goal" value="' + sb.goal + '"> 人 <span class="muted">0 = 目標なし（ゲージを出さない）</span>');
+    row("増加数", '<button data-subs-act="base">今から数え直す</button> <span class="muted">毎日 0 時にも 0 に戻ります。配信の始めに押すと「配信中に増えた人数」になります</span>');
+    return "<h2>登録者数の取り方（告知スライド・スロット告知で共通）</h2>" +
+      '<div class="subs-now" data-subs-st>' + subsNowHtml() + "</div>" +
+      '<div class="ed-grid">' + rows.join("") + "</div>";
+  }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest("[data-subs-box] button"); if (!b || !subsData) return;
+    if (b.dataset.subsSrc) { subsPut({ source: b.dataset.subsSrc }); return; }
+    var act = b.dataset.subsAct;
+    if (act === "login" && window.sortieApp) window.sortieApp.subsLogin();
+    else if (act === "reload" && window.sortieApp) { window.sortieApp.subsReload(); toast("読み直しています"); }
+    else if (act === "logout" && window.sortieApp) { if (confirm("このアプリに保存されている YouTube のログイン情報を消しますか？")) window.sortieApp.subsLogout().then(function () { toast("ログアウトしました"); }); }
+    else if (act === "base") {
+      fetch("/api/subs/base", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); toast("増加数を 0 から数え直します"); })
+        .catch(function () { toast("まだ登録者数が取れていません"); });
+    }
+  });
+  function subsInputCommit(inp) {
+    var k = inp.dataset.subsIn, o = {};
+    if (k === "url") {
+      var v = inp.value.trim();
+      if (v && !/^https:\/\/studio\.youtube\.com\//.test(v)) { toast("https://studio.youtube.com/ で始まる URL を貼ってください"); return; }
+      if (v === subsData.subs.url) return;
+      o.url = v;
+    } else {
+      var n = Math.max(0, Math.round(Number(inp.value)) || 0);
+      if (n === subsData.subs[k]) return;
+      o[k] = n;
+    }
+    subsPut(o);
+  }
+  document.addEventListener("change", function (ev) { if (ev.target.dataset && ev.target.dataset.subsIn) subsInputCommit(ev.target); });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Enter" && ev.target.dataset && ev.target.dataset.subsIn) { ev.preventDefault(); ev.target.blur(); } });
+  document.addEventListener("focusout", function (ev) { if (ev.target.dataset && ev.target.dataset.subsIn) setTimeout(drawSubsBox, 0); });
 
   // 最前面表示（アプリのウィンドウで開いているときだけ使える）
   if (window.sortieApp) {

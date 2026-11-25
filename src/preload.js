@@ -7,8 +7,6 @@ contextBridge.exposeInMainWorld("sortieApp", {
   setAlwaysOnTop: (on) => ipcRenderer.invoke("always-on-top:set", on === true),
   getHotkeyStatus: () => ipcRenderer.invoke("hotkeys:status"),
   pauseHotkeys: (on) => ipcRenderer.invoke("hotkeys:pause", on === true),
-  subsLogin: () => ipcRenderer.invoke("subs:login"),
-  subsReload: () => ipcRenderer.invoke("subs:reload"),
-  subsLogout: () => ipcRenderer.invoke("subs:logout"),
+  openExtensionFolder: () => ipcRenderer.invoke("subs:extension-folder"),
   onHotkeyStatus: (fn) => { ipcRenderer.on("hotkeys:status", (e, s) => fn(s)); },
 });

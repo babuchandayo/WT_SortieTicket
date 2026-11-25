@@ -1596,10 +1596,8 @@
   function subsStatusHtml() {
     var st = subsData.status, sb = subsData.subs;
     if (sb.source === "manual") return '<span class="subs-st">手入力の数を表示中</span>';
-    if (st.state === "noapp") return '<span class="subs-st wait">自動取得は SortieTicket アプリの起動中だけ動きます（このページはブラウザで開かれています）</span>';
-    if (st.state === "ok") return '<span class="subs-st ok">✓ YouTube Studio から取得中' + (sb.readAt ? "（" + hm(sb.readAt) + " 時点）" : "") + "</span>";
-    var cls = st.state === "login" || st.state === "error" ? "ng" : "wait";
-    return '<span class="subs-st ' + cls + '">' + esc(st.message || "準備中…") + "</span>";
+    if (st.state === "ok") return '<span class="subs-st ok">✓ Chrome の YouTube Studio から受信中' + (sb.readAt ? "（" + hm(sb.readAt) + " 時点）" : "") + "</span>";
+    return '<span class="subs-st wait">' + esc(st.message || "準備中…") + "</span>";
   }
   function drawSubsBox() {
     var boxes = document.querySelectorAll("[data-subs-box]");
@@ -1628,17 +1626,19 @@
       subsStatusHtml();
   }
   function subsBoxHtml() {
-    var sb = subsData.subs, app = !!(window.sortieApp && window.sortieApp.subsLogin);
+    var sb = subsData.subs, app = !!(window.sortieApp && window.sortieApp.openExtensionFolder);
     var rows = [];
     function row(label, html) { rows.push('<span class="lab2">' + label + "</span><div>" + html + "</div>"); }
     row("取り方", '<div class="seg2">' + [["studio", "YouTube Studio から自動"], ["manual", "手入力"]].map(function (k) { return '<button data-subs-src="' + k[0] + '" class="' + (k[0] === sb.source ? "on" : "") + '">' + k[1] + "</button>"; }).join("") + "</div>");
     if (sb.source === "studio") {
-      row("Studio の URL", '<input type="text" data-subs-in="url" placeholder="https://studio.youtube.com/channel/…" value="' + esc(sb.url) + '">' +
-        '<details><summary>URL の調べ方</summary><ol><li>ブラウザで YouTube Studio を開く</li><li>左のメニューの「アナリティクス」→ 右側の「現在の登録者数」のカードにある「詳細」（または「ライブカウントを表示」）を開く</li><li>大きく登録者数が表示されたページのアドレスをコピーして、ここに貼り付ける</li></ol></details>');
-      row("ログイン", app
-        ? '<div class="row"><button data-subs-act="login" class="primary">ログイン</button><button data-subs-act="reload">読み直す</button><button data-subs-act="logout">ログアウト</button></div>' +
-          '<div class="muted" style="margin-top:4px">初回はログインが必要です。開いたウィンドウで YouTube にログインし、登録者数のページが出たら閉じてください。数日でログアウトされることがあります。</div>'
-        : '<div class="muted">ログインは SortieTicket アプリのウィンドウから行ってください。</div>');
+      row("Chrome 拡張機能", (app ? '<button data-subs-act="ext" class="primary">拡張機能のフォルダを開く</button>' : '<span class="muted">拡張機能のファイルはリポジトリの <code>src/extension</code> にあります</span>') +
+        '<details' + (sb.readAt ? "" : " open") + '><summary>はじめての設定（1 回だけ）</summary><ol>' +
+        "<li>" + (app ? "上のボタンで拡張機能のフォルダを開く" : "拡張機能のフォルダを用意する") + "</li>" +
+        "<li>Chrome のアドレス欄に <code>chrome://extensions</code> と入れて開き、右上の「デベロッパー モード」をオンにする</li>" +
+        "<li>「パッケージ化されていない拡張機能を読み込む」を押し、1 のフォルダを選ぶ</li>" +
+        "<li>普段の Chrome で YouTube Studio を開き、「アナリティクス」→「現在の登録者数」の詳細（大きく数が出るページ）を開く</li>" +
+        "<li>上の状態が「✓ 受信中」になれば完了。配信中はこのタブを開いたままにしてください（裏のタブだと更新が 1 分おきくらいになることがあります）</li>" +
+        "</ol></details>");
     } else {
       row("人数", '<input type="number" class="num-in" min="0" data-subs-in="manual" value="' + sb.manual + '"> 人');
     }
@@ -1652,9 +1652,7 @@
     var b = ev.target.closest("[data-subs-box] button"); if (!b || !subsData) return;
     if (b.dataset.subsSrc) { subsPut({ source: b.dataset.subsSrc }); return; }
     var act = b.dataset.subsAct;
-    if (act === "login" && window.sortieApp) window.sortieApp.subsLogin();
-    else if (act === "reload" && window.sortieApp) { window.sortieApp.subsReload(); toast("読み直しています"); }
-    else if (act === "logout" && window.sortieApp) { if (confirm("このアプリに保存されている YouTube のログイン情報を消しますか？")) window.sortieApp.subsLogout().then(function () { toast("ログアウトしました"); }); }
+    if (act === "ext" && window.sortieApp) window.sortieApp.openExtensionFolder().then(function (p) { if (p) toast("フォルダを開きました"); }, function () { toast("フォルダを用意できませんでした"); });
     else if (act === "base") {
       fetch("/api/subs/base", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
         .then(function (r) { if (!r.ok) throw new Error(r.status); toast("増加数を 0 から数え直します"); })
@@ -1663,16 +1661,9 @@
   });
   function subsInputCommit(inp) {
     var k = inp.dataset.subsIn, o = {};
-    if (k === "url") {
-      var v = inp.value.trim();
-      if (v && !/^https:\/\/studio\.youtube\.com\//.test(v)) { toast("https://studio.youtube.com/ で始まる URL を貼ってください"); return; }
-      if (v === subsData.subs.url) return;
-      o.url = v;
-    } else {
-      var n = Math.max(0, Math.round(Number(inp.value)) || 0);
-      if (n === subsData.subs[k]) return;
-      o[k] = n;
-    }
+    var n = Math.max(0, Math.round(Number(inp.value)) || 0);
+    if (n === subsData.subs[k]) return;
+    o[k] = n;
     subsPut(o);
   }
   document.addEventListener("change", function (ev) { if (ev.target.dataset && ev.target.dataset.subsIn) subsInputCommit(ev.target); });

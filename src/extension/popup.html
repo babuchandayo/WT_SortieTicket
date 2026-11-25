@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<style>
+  body { font: 13px/1.5 "Yu Gothic UI", "Meiryo", sans-serif; width: 300px; margin: 12px; color: #222; }
+  h1 { font-size: 14px; margin: 0 0 8px; }
+  .st { padding: 6px 8px; border-radius: 6px; background: #eee; margin-bottom: 10px; }
+  .ok { background: #dff5e6; } .ng { background: #fde2e2; }
+  label { display: flex; gap: 6px; align-items: center; }
+  input { width: 80px; }
+  p { color: #666; font-size: 12px; margin: 8px 0 0; }
+</style></head>
+<body>
+  <h1>SortieTicket 登録者カウンター連携</h1>
+  <div class="st" id="st">まだ送っていません</div>
+  <label>アプリのポート <input id="port" type="number" min="1" max="65535"></label>
+  <p>YouTube Studio の「現在の登録者数」のページを開いたままにしておくと、表示されている数を SortieTicket に送ります。タブが裏にあると、更新が 1 分おきくらいに遅くなることがあります。</p>
+  <script src="popup.js"></script>
+</body></html>

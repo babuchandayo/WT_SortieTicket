@@ -4,7 +4,6 @@ const { app, BrowserWindow, Menu, dialog, shell, ipcMain, globalShortcut } = req
 const fs = require("fs");
 const path = require("path");
 const { createServer } = require("./server");
-const { createSubsReader } = require("./subs-reader");
 
 const DEFAULT_PORT = 4630;
 
@@ -22,7 +21,6 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   let win = null;
   let srv = null;
-  let subsReader = null;
 
   app.on("second-instance", () => {
     if (win) { if (win.isMinimized()) win.restore(); win.focus(); }
@@ -34,8 +32,10 @@ if (!app.requestSingleInstanceLock()) {
     const config = readConfig(configFile);
     const port = Number(config.port) || DEFAULT_PORT;
     if (!fs.existsSync(configFile)) writeConfig(configFile, { port });
+    // 前の版でアプリ内ログイン用に作っていた保存領域（Google にログインを拒否されたため廃止）を片付ける
+    try { fs.rmSync(path.join(dataDir, "Partitions", "yt-studio"), { recursive: true, force: true }); } catch (e) { /* 使用中など */ }
 
-    srv = createServer({ port, dataDir, subsReader: true });
+    srv = createServer({ port, dataDir });
     try {
       await srv.listen();
     } catch (e) {
@@ -111,21 +111,24 @@ if (!app.requestSingleInstanceLock()) {
       if (on === true) globalShortcut.unregisterAll(); else registerHotkeys();
     });
 
-    // 登録者カウンター: YouTube Studio のページを裏で開いて数を読む
-    subsReader = createSubsReader(srv, { parent: () => win });
-    subsReader.start();
-    ipcMain.handle("subs:login", (e) => { if (fromWin(e)) subsReader.openLogin(); });
-    ipcMain.handle("subs:reload", (e) => { if (fromWin(e)) subsReader.reload(); });
-    ipcMain.handle("subs:logout", (e) => (fromWin(e) ? subsReader.logout() : null));
+    // 登録者カウンター: Chrome 拡張機能のファイルを設定フォルダに書き出して開く（Chrome の「パッケージ化されていない拡張機能を読み込む」で選んでもらう）
+    ipcMain.handle("subs:extension-folder", async (e) => {
+      if (!fromWin(e)) return null;
+      const src = path.join(__dirname, "extension");
+      const dest = path.join(dataDir, "chrome-extension");
+      fs.mkdirSync(dest, { recursive: true });
+      for (const f of fs.readdirSync(src)) fs.writeFileSync(path.join(dest, f), fs.readFileSync(path.join(src, f)));
+      await shell.openPath(dest);
+      return dest;
+    });
 
     // 外部リンクは既定のブラウザで開く
     win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
     win.loadURL(srv.url + "control?app=1");
-    // 裏で開いている Studio のウィンドウが残っていても、操作画面を閉じたら終了する
-    win.on("closed", () => { win = null; app.quit(); });
+    win.on("closed", () => { win = null; });
   });
 
   app.on("window-all-closed", () => app.quit());
   app.on("will-quit", () => globalShortcut.unregisterAll());
-  app.on("before-quit", () => { if (subsReader) subsReader.close(); if (srv) srv.close(); });
+  app.on("before-quit", () => { if (srv) srv.close(); });
 }

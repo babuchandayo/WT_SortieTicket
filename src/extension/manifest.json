@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "SortieTicket 登録者カウンター連携",
+  "version": "1.0.0",
+  "description": "YouTube Studio の「現在の登録者数」ページに表示されている数を、同じパソコンで動いている SortieTicket に送ります。",
+  "permissions": ["storage"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["https://studio.youtube.com/*"], "js": ["content.js"], "run_at": "document_idle" }
+  ],
+  "action": { "default_title": "SortieTicket 登録者カウンター連携", "default_popup": "popup.html" }
+}

@@ -6,12 +6,20 @@ const http = require("http");
 const os = require("os");
 const path = require("path");
 const { createServer } = require("../src/server");
-const { sanitizeSubs, parseCount, ensureBase, publicSubs, dayOf } = require("../src/subs");
+const { sanitizeSubs, parseCount, ensureBase, publicSubs, dayOf, subsStatus, STALE_MS } = require("../src/subs");
 
 const PORT = 47635;
 const base = "http://127.0.0.1:" + PORT;
 const put = (body) => ({ method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const post = { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" };
+
+// 接続を使い回さずに 1 回だけ送る（Origin を付けたいときなど）
+function raw(method, p, body, headers) {
+  return new Promise((resolve, reject) => {
+    const req = http.request(base + p, { method, agent: false, headers: Object.assign({ "Content-Type": "application/json" }, headers || {}) }, (res) => { res.resume(); resolve(res.statusCode); });
+    req.on("error", reject); req.end(JSON.stringify(body));
+  });
+}
 
 test("parseCount は数字だけのものを数にし、読み間違いは null にする", () => {
   assert.strictEqual(parseCount("1,234"), 1234);
@@ -26,10 +34,20 @@ test("parseCount は数字だけのものを数にし、読み間違いは null 
 });
 
 test("sanitizeSubs は不正な値を補正する", () => {
-  const s = sanitizeSubs({ source: "api", url: "https://evil.example/", manual: -5, goal: "1500", read: "x", readAt: -1, base: { count: 10, at: 5, day: "2026-11-19" } });
-  assert.deepStrictEqual(s, { source: "studio", url: "", manual: 0, goal: 1500, read: null, readAt: 0, base: { count: 10, at: 5, day: "2026-11-19" } });
-  assert.strictEqual(sanitizeSubs({ url: "https://studio.youtube.com/channel/UCxx/analytics" }).url, "https://studio.youtube.com/channel/UCxx/analytics");
-  assert.strictEqual(sanitizeSubs({ url: "http://studio.youtube.com/x" }).url, "");
+  const s = sanitizeSubs({ source: "api", url: "https://studio.youtube.com/old", manual: -5, goal: "1500", read: "x", readAt: -1, base: { count: 10, at: 5, day: "2026-11-19" } });
+  assert.deepStrictEqual(s, { source: "studio", manual: 0, goal: 1500, read: null, readAt: 0, base: { count: 10, at: 5, day: "2026-11-19" } });
+  // 保存されていた「まだ読めていない」（null）は 0 にしない
+  assert.strictEqual(sanitizeSubs(JSON.parse(JSON.stringify({ read: null }))).read, null);
+  assert.strictEqual(sanitizeSubs({ read: 0, readAt: 0 }).read, null);
+  assert.strictEqual(sanitizeSubs({ read: 1234, readAt: 5 }).read, 1234);
+});
+
+test("自動取得の状況: まだ届いていない・届いている・止まっている・手入力", () => {
+  const now = 1e12;
+  assert.strictEqual(subsStatus(sanitizeSubs({}), now).state, "wait");
+  assert.strictEqual(subsStatus(sanitizeSubs({ read: 5, readAt: now - 10e3 }), now).state, "ok");
+  assert.strictEqual(subsStatus(sanitizeSubs({ read: 5, readAt: now - STALE_MS - 1 }), now).state, "wait");
+  assert.strictEqual(subsStatus(sanitizeSubs({ source: "manual" }), now).state, "off");
 });
 
 test("増加数の基準は日付が変わると取り直す", () => {
@@ -48,32 +66,33 @@ test("増加数の基準は日付が変わると取り直す", () => {
 
 test("サーバー: 設定・読み取り・基準のリセット・保存", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sortie-subs-"));
-  let srv = createServer({ port: PORT, dataDir: dir, subsReader: true });
+  let srv = createServer({ port: PORT, dataDir: dir });
   await srv.listen();
   try {
     let j = await (await fetch(base + "/api/subs")).json();
     assert.strictEqual(j.view.count, null);
-    assert.strictEqual(j.status.state, "off");
+    assert.strictEqual(j.status.state, "wait");
 
-    const seen = [];
-    srv.onSubsChange((s, info) => seen.push(info));
-    let r = await fetch(base + "/api/subs", put({ settings: { url: "https://studio.youtube.com/channel/UCabc/analytics/tab-overview", goal: 1500 } }));
+    let r = await fetch(base + "/api/subs", put({ settings: { goal: 1500 } }));
     assert.strictEqual(r.status, 200); await r.text();
-    assert.strictEqual(seen.pop().urlChanged, true);
 
-    srv.setSubsReading(1200);
-    srv.setSubsReading(1234);
+    // Chrome 拡張機能から届く（Origin は chrome-extension://<32 文字>）
+    const ext = { Origin: "chrome-extension://abcdefghijklmnopabcdefghijklmnop" };
+    assert.strictEqual(await raw("POST", "/api/subs/reading", { count: 1200 }, ext), 200);
+    assert.strictEqual(await raw("POST", "/api/subs/reading", { count: 1234 }, ext), 200);
     j = await (await fetch(base + "/api/subs")).json();
-    assert.deepStrictEqual([j.view.count, j.view.goal, j.view.delta], [1234, 1500, 34]);
+    assert.deepStrictEqual([j.view.count, j.view.goal, j.view.delta, j.status.state], [1234, 1500, 34, "ok"]);
+    // 普通の Web サイトからは受け付けない。数でないものも受け付けない
+    assert.strictEqual(await raw("POST", "/api/subs/reading", { count: 1 }, { Origin: "https://evil.example" }), 403);
+    assert.strictEqual(await raw("POST", "/api/subs/reading", { count: "1,234" }, ext), 400);
+    assert.strictEqual(await raw("POST", "/api/subs/reading", { count: -1 }, ext), 400);
+    j = await (await fetch(base + "/api/subs")).json();
+    assert.strictEqual(j.view.count, 1234);
 
     r = await fetch(base + "/api/subs/base", post);
     assert.strictEqual(r.status, 200); await r.text();
     j = await (await fetch(base + "/api/subs")).json();
     assert.strictEqual(j.view.delta, 0);
-
-    srv.setSubsStatus("login", "ログインしてください");
-    j = await (await fetch(base + "/api/subs")).json();
-    assert.deepStrictEqual(j.status, { state: "login", message: "ログインしてください" });
 
     // 手入力に切り替えると、増加数は手入力の数から数え直す
     await (await fetch(base + "/api/subs", put({ settings: { source: "manual", manual: 50 } }))).text();
@@ -81,11 +100,8 @@ test("サーバー: 設定・読み取り・基準のリセット・保存", asy
     assert.deepStrictEqual([j.view.count, j.view.delta], [50, 0]);
 
     // 他のサイトからは書き換えられない
-    const code = await new Promise((resolve, reject) => {
-      const req = http.request(base + "/api/subs", { method: "PUT", agent: false, headers: { "Content-Type": "application/json", Origin: "https://evil.example" } }, (res) => { res.resume(); resolve(res.statusCode); });
-      req.on("error", reject); req.end(JSON.stringify({ settings: { manual: 1 } }));
-    });
-    assert.strictEqual(code, 403);
+    assert.strictEqual(await raw("PUT", "/api/subs", { settings: { manual: 1 } }, { Origin: "https://evil.example" }), 403);
+    assert.strictEqual(await raw("PUT", "/api/subs", { settings: { manual: 1 } }, ext), 403);
   } finally { await srv.close(); }
 
   srv = createServer({ port: PORT, dataDir: dir });
@@ -94,6 +110,6 @@ test("サーバー: 設定・読み取り・基準のリセット・保存", asy
   try {
     const j = await (await fetch(base + "/api/subs")).json();
     assert.deepStrictEqual([j.subs.source, j.subs.manual, j.subs.goal, j.subs.read], ["manual", 50, 1500, 1234]);
-    assert.strictEqual(j.status.state, "noapp");
+    assert.strictEqual(j.status.state, "off");
   } finally { await srv.close(); }
 });

@@ -20,7 +20,8 @@
 //   PUT  /api/slot                … スロット告知の更新（操作画面から）
 //   POST /api/slot/spin           … リールを回す（結果はサーバーが抽選して配信する）
 //   GET  /api/subs                … 登録者カウンターの現在の状態
-//   PUT  /api/subs                … 登録者カウンターの設定（取り方・URL・手入力の数・目標）
+//   PUT  /api/subs                … 登録者カウンターの設定（取り方・手入力の数・目標）
+//   POST /api/subs/reading        … Chrome 拡張機能から、YouTube Studio に表示されている登録者数を受け取る
 //   POST /api/subs/base           … 増加数の基準を今の数にする
 const http = require("http");
 const fs = require("fs");
@@ -31,7 +32,7 @@ const { sanitizeState, defaultState } = require("./state");
 const { sanitizeCounter, sanitizeCounterSettings, defaultCounter, applyAction } = require("./counter");
 const { sanitizePromo, defaultPromo, imageExt, usedImages, IMAGE_RE, LIMITS: PROMO_LIMITS } = require("./promo");
 const { sanitizeSlot, defaultSlot, pickNext, usedSlotImages } = require("./slot");
-const { sanitizeSubs, defaultSubs, applySubsSettings, ensureBase, publicSubs, currentCount, dayOf } = require("./subs");
+const { sanitizeSubs, defaultSubs, applySubsSettings, ensureBase, publicSubs, currentCount, dayOf, subsStatus, count: subsCount } = require("./subs");
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -90,8 +91,6 @@ function createServer(opts) {
   if (subsFile) {
     try { subs = sanitizeSubs(JSON.parse(fs.readFileSync(subsFile, "utf8"))); } catch (e) { /* 初回起動など */ }
   }
-  // Studio からの読み取りの状況（保存しない）。state: off / loading / ok / login / error / noapp
-  let subsStatus = { state: opts.subsReader ? "off" : "noapp", message: "" };
   // どのスライドからも使われなくなった画像は起動時に片付ける（告知スライドとスロット告知で同じフォルダを使う）
   // （起動中は消さない。削除したスライドを作り直したときなどに残っていた方が安全なため）
   try {
@@ -125,7 +124,7 @@ function createServer(opts) {
   function payload() { return JSON.stringify({ rev, state }); }
   function counterPayload() { return JSON.stringify({ rev: crev, counter }); }
   function promoPayload() { return JSON.stringify({ rev: prev, promo }); }
-  function subsPayload() { return JSON.stringify({ rev: subrev, subs, view: publicSubs(subs), status: subsStatus, now: Date.now() }); }
+  function subsPayload() { return JSON.stringify({ rev: subrev, subs, view: publicSubs(subs), status: subsStatus(subs, Date.now()), now: Date.now() }); }
   function slotPayload() { return JSON.stringify({ rev: srev, slot, spin: lastSpin, now: Date.now() }); }
   function sendAll(event, data) {
     const msg = "event: " + event + "\ndata: " + data + "\n\n";
@@ -195,26 +194,28 @@ function createServer(opts) {
 
   // ---- 登録者カウンター ----
   const subsListeners = new Set();
+  let lastStatus = "";
+  function statusKey() { return subsStatus(subs, Date.now()).state; }
   function setSubs(next, info) {
     const before = JSON.stringify(publicSubs(subs));
     subs = ensureBase(next, Date.now());
-    persistSubs();
-    const changed = before !== JSON.stringify(publicSubs(subs)) || (info && info.force);
-    if (changed) { subrev++; sendAll("subs", subsPayload()); }
+    // 届いた数は毎回保存すると書き込みが多いので、数が変わったときと設定を変えたときだけ保存する
+    const changed = before !== JSON.stringify(publicSubs(subs));
+    if (changed || (info && info.force)) persistSubs();
+    const st = statusKey();
+    if (changed || st !== lastStatus || (info && info.force)) { lastStatus = st; subrev++; sendAll("subs", subsPayload()); }
     for (const fn of subsListeners) { try { fn(subs, info || {}); } catch (e) { /* 通知先の不具合で止めない */ } }
   }
-  // Studio から読めた数（アプリの読み取り役から呼ばれる）
+  // Studio から読めた数（Chrome 拡張機能から届く）
   function setSubsReading(n) {
     setSubs(Object.assign({}, subs, { read: n, readAt: Date.now() }), { reading: true });
   }
-  function setSubsStatus(state, message) {
-    const next = { state: String(state), message: String(message || "") };
-    if (next.state === subsStatus.state && next.message === subsStatus.message) return;
-    subsStatus = next; subrev++;
-    sendAll("subs", subsPayload());
-  }
-  // 日付が変わったら増加数の基準を取り直す（手入力のときは読み取りが来ないので定期的に見る）
-  const dayTimer = setInterval(() => { const n = ensureBase(subs, Date.now()); if (n !== subs) setSubs(n); }, 60000);
+  // 日付が変わったら増加数の基準を取り直す。数が届かなくなったら状態の表示を変える
+  lastStatus = statusKey();
+  const dayTimer = setInterval(() => {
+    const n = ensureBase(subs, Date.now());
+    if (n !== subs || statusKey() !== lastStatus) setSubs(n);
+  }, 15000);
 
   function readJson(req, res, cb) {
     if (!originOk(req)) return send(res, 403, "forbidden");
@@ -352,16 +353,31 @@ function createServer(opts) {
           if (!j || !j.settings || typeof j.settings !== "object") return send(res, 400, "bad request");
           const next = applySubsSettings(subs, j.settings);
           const sourceChanged = next.source !== subs.source;
-          const urlChanged = next.url !== subs.url;
           // 数の取り方を変えたら、増加数は新しい取り方の数から数え直す
           if (sourceChanged) next.base = null;
-          // URL を変えたら前のチャンネルの数は使わない
-          if (urlChanged) { next.read = null; next.readAt = 0; next.base = next.source === "studio" ? null : next.base; }
-          setSubs(next, { force: true, sourceChanged, urlChanged });
+          setSubs(next, { force: true, sourceChanged });
           send(res, 200, JSON.stringify({ rev: subrev }), "application/json");
         });
       }
       return send(res, 405, "method not allowed");
+    }
+    if (p === "/api/subs/reading") {
+      if (req.method !== "POST") return send(res, 405, "method not allowed");
+      // 送ってくるのは Chrome 拡張機能（Origin が chrome-extension://…）。普通の Web サイトからは受け付けない
+      const o = req.headers.origin;
+      if (o && !/^chrome-extension:\/\/[a-p]{32}$/.test(o) && !originOk(req)) return send(res, 403, "forbidden");
+      if (!/^application\/json/.test(req.headers["content-type"] || "")) return send(res, 415, "json only");
+      let body = "";
+      req.on("data", (c) => { body += c; if (body.length > 1024) req.destroy(); });
+      req.on("end", () => {
+        let j;
+        try { j = JSON.parse(body); } catch (e) { return send(res, 400, "bad request"); }
+        const n = j && Number.isInteger(j.count) ? subsCount(j.count) : null;
+        if (n === null) return send(res, 400, "bad request");
+        setSubsReading(n);
+        send(res, 200, "{}", "application/json");
+      });
+      return;
     }
     if (p === "/api/subs/base") {
       if (req.method !== "POST") return send(res, 405, "method not allowed");
@@ -425,9 +441,8 @@ function createServer(opts) {
     getPromo: () => ({ rev: prev, promo }),
     getSlot: () => ({ rev: srev, slot, spin: lastSpin }),
     spinSlot,
-    getSubs: () => ({ rev: subrev, subs, view: publicSubs(subs), status: subsStatus }),
+    getSubs: () => ({ rev: subrev, subs, view: publicSubs(subs), status: subsStatus(subs, Date.now()) }),
     setSubsReading,
-    setSubsStatus,
     onSubsChange(fn) { subsListeners.add(fn); return () => subsListeners.delete(fn); },
     onSlotChange(fn) { slotListeners.add(fn); return () => slotListeners.delete(fn); },
     counterAction,

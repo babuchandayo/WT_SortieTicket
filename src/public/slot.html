@@ -162,7 +162,9 @@
       { offset: 0.92, transform: "translateY(" + (E + bounce) + "px)", filter: "blur(0px)", easing: "cubic-bezier(.3,0,.3,1)" },
       { offset: 1, transform: "translateY(" + E + "px)", filter: "blur(0px)" },
     ], { duration: dur, fill: "forwards" });
-    anim.onfinish = function () { anim = null; showStill(sp.id); finish(true); };
+    // fill: "forwards" の最終位置（1 枚分上）が残ると、作り直した 1 枚が窓の外に出て暗転するので、止まったら必ず外す
+    var a = anim;
+    a.onfinish = function () { if (anim === a) anim = null; showStill(sp.id); a.cancel(); finish(true); };
   }
   // 直前と違うスライドをランダムに（最後の 1 枚は結果とも違うものに）
   function randomOther(pool, prevS, nextS) {
